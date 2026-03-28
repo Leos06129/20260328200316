@@ -1,4 +1,4 @@
-#!/usr/bin/env sh
+﻿#!/usr/bin/env sh
 
 #
 # Copyright 2015 the original author or authors.
@@ -145,7 +145,7 @@ if [ "$cygwin" = "true" -o "$msys" = "true" ] ; then
     # Now convert the arguments
     arg_count=0
     args=""
-    for i do
+    for i in "$@"; do
         arg=`echo "$i" | sed -e "s|^$OURCYGPATTERN|.|"`
         case $arg in                        # No need to convert this
             .*) ;;
