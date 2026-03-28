@@ -32,23 +32,23 @@
 ## 🚀 快速开始
 
 ### 方法1：直接下载APK（推荐）
-1. 前往 [Releases页面](https://github.com/yourusername/random-screensaver/releases)
+1. 前往 [Releases页面](https://github.com/Leos06129/20260328200316/releases)
 2. 下载最新版本的 `app-debug.apk`
 3. 安装到Android设备（需要允许安装未知来源应用）
 
 ### 方法2：通过GitHub Actions构建
-1. Fork本仓库
-2. 在Actions标签页启用工作流程
-3. 推送到main分支会自动构建
+1. 访问仓库的[Actions页面](https://github.com/Leos06129/20260328200316/actions)
+2. 找到Android Build工作流
+3. 运行工作流或等待自动触发
 4. 在构建完成后下载APK
 
 ### 方法3：本地构建
 ```bash
 # 克隆项目
-git clone https://github.com/yourusername/random-screensaver.git
+git clone https://github.com/Leos06129/20260328200316.git
 
 # 进入项目目录
-cd random-screensaver
+cd 20260328200316
 
 # 构建APK
 ./gradlew assembleDebug
@@ -122,14 +122,14 @@ random-screensaver/
 ## 📞 联系与支持
 
 遇到问题或有建议？
-- 提交 [Issue](https://github.com/yourusername/random-screensaver/issues)
-- 查看 [Wiki](https://github.com/yourusername/random-screensaver/wiki)
+- 提交 [Issue](https://github.com/Leos06129/20260328200316/issues)
+- 查看 [Wiki](https://github.com/Leos06129/20260328200316/wiki)
 
 ## 🌐 相关链接
 
-- [应用演示视频](https://youtube.com/demo)
-- [设计文档](docs/DESIGN.md)
-- [API文档](docs/API.md)
+- [GitHub仓库](https://github.com/Leos06129/20260328200316)
+- [Actions构建状态](https://github.com/Leos06129/20260328200316/actions)
+- [Releases页面](https://github.com/Leos06129/20260328200316/releases)
 
 ---
 
