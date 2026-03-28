@@ -82,9 +82,11 @@ esac
 
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 
-
 # Determine the Java version to use.
-if [ -n "$JAVA_HOME" ] ; then
+JAVA_HOME_11="/usr/lib/jvm/java-11-openjdk-amd64"
+if [ -d "$JAVA_HOME_11" ]; then
+    JAVA_HOME="$JAVA_HOME_11"
+elif [ -n "$JAVA_HOME" ] ; then
     if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
         # IBM's JDK on AIX uses strange locations for the executables
         JAVACMD="$JAVA_HOME/jre/sh/java"
@@ -92,17 +94,11 @@ if [ -n "$JAVA_HOME" ] ; then
         JAVACMD="$JAVA_HOME/bin/java"
     fi
     if [ ! -x "$JAVACMD" ] ; then
-        die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME
-
-Please set the JAVA_HOME variable in your environment to match the
-location of your Java installation."
+        die "ERROR: JAVA_HOME is set to an invalid directory: $JAVA_HOME"
     fi
 else
     JAVACMD="java"
-    which java >/dev/null 2>&1 || die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH.
-
-Please set the JAVA_HOME variable in your environment to match the
-location of your Java installation."
+    which java >/dev/null 2>&1 || die "ERROR: JAVA_HOME is not set and no 'java' command could be found in your PATH."
 fi
 
 # Increase the maximum file descriptors if we can.
@@ -178,35 +174,16 @@ set -- \
         "$@"
 
 # Stop when "xargs" is not available.
-if ! command -v xargs >/dev/null 2>&1
-then
+if ! command -v xargs >/dev/null 2>&1 ; then
     die "xargs is not available"
 fi
 
 # Use "xargs" to parse quoted args.
-#
-# With -n1 it outputs one arg per line, with the quotes and backslashes removed.
-#
-# In Bash you could simply go:
-#
-#   readarray ARGS < <( xargs -n1 <<<"$var" ) &&
-#   set -- "${ARGS[@]}" "$@"
-#
-# but POSIX shell has neither arrays nor command substitution, so instead we
-# post-process each arg (as a line of input to sed) to backslash-escape any
-# character that might be a shell metacharacter, then use eval to reverse
-# that process (while maintaining the separation between arguments), and wrap
-# the whole thing up as a single "set" statement.
-#
-# This will of course break if any of these variables contains a newline or
-# an unmatched quote.
-#
-
-eval "set -- $(
+set -- $(
         printf '%s\n' "$DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS" |
         xargs -n1 |
         sed ' s~[^-[:alnum:]+,./:=@_]~\\&~g; ' |
         tr '\n' ' '
-    )" '"$@"'
+    ) "$@"
 
 exec "$JAVACMD" "$@"
