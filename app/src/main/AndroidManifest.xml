@@ -58,7 +58,7 @@
         <!-- 前台服务 -->
         <service
             android:name=".ScreenService"
-            android:foregroundServiceType="specialUse"
+            android:foregroundServiceType="dataSync"
             android:exported="false" />
         
         <!-- 屏幕状态接收器 -->
