@@ -99,7 +99,7 @@
             android:layout_marginBottom="24dp"
             android:text="说明：\n1. 锁屏时固定使用10-12秒间隔\n2. 常规时使用您设置的间隔范围\n3. 每次显示文字颜色、大小、位置随机"
             android:textSize="12sp"
-            android:textColor="@android:color/darker_gray" />
+            android:textColor="@color/darker_gray" />
 
         <!-- 保存按钮 -->
         <Button

@@ -110,7 +110,7 @@
         android:layout_marginTop="32dp"
         android:text="提示：首次使用需要授予悬浮窗权限"
         android:textSize="12sp"
-        android:textColor="@android:color/darker_gray"
+        android:textColor="@color/darker_gray"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@+id/btnSettings" />
