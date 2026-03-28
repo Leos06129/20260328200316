@@ -1,0 +1,3 @@
+# This is a placeholder file. The actual gradle-wrapper.jar will be downloaded by gradlew script.
+# The gradlew script will automatically download the correct Gradle distribution.
+# This file is intentionally left empty to avoid committing large binary files to git.
