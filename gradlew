@@ -83,10 +83,7 @@ esac
 CLASSPATH=$APP_HOME/gradle/wrapper/gradle-wrapper.jar
 
 # Determine the Java version to use.
-JAVA_HOME_11="/usr/lib/jvm/java-11-openjdk-amd64"
-if [ -d "$JAVA_HOME_11" ]; then
-    JAVA_HOME="$JAVA_HOME_11"
-elif [ -n "$JAVA_HOME" ] ; then
+if [ -n "$JAVA_HOME" ] ; then
     if [ -x "$JAVA_HOME/jre/sh/java" ] ; then
         # IBM's JDK on AIX uses strange locations for the executables
         JAVACMD="$JAVA_HOME/jre/sh/java"
