@@ -1,5 +1,9 @@
 # Android随机屏保应用
 
+[![Android Build](https://github.com/YOUR_USERNAME/random-screensaver/actions/workflows/android-build.yml/badge.svg)](https://github.com/YOUR_USERNAME/random-screensaver/actions/workflows/android-build.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Android API](https://img.shields.io/badge/API-21%2B-brightgreen.svg?style=flat)](https://android-arsenal.com/api?level=21)
+
 一个Android随机屏保应用，可以在锁屏和常规状态下随机显示自定义文字，每次显示的文字颜色、大小、位置都随机生成。
 
 ## 🌟 功能特性
