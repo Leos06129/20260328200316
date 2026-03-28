@@ -42,6 +42,8 @@ jobs:
           
     - name: Setup Gradle
       run: |
+        # 确保gradlew使用Unix换行符
+        sed -i 's/\r$//' ./gradlew
         # 确保gradlew有执行权限
         chmod +x ./gradlew
         # 显示gradle版本
