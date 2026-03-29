@@ -281,12 +281,15 @@ class FullscreenActivity : AppCompatActivity() {
                 biometricPrompt.authenticate(promptInfo)
                 
                 // 5秒超时，取消认证并回到屏保循环
-                handler.postDelayed({
-                    if (biometricPrompt.isStarted) {
+                val timeoutRunnable = Runnable {
+                    try {
                         biometricPrompt.cancelAuthentication()
+                    } catch (e: Exception) {
+                        Log.d("FullscreenActivity", "取消认证失败: ${e.message}")
                     }
                     restartDisplayCycle()
-                }, 5000)
+                }
+                handler.postDelayed(timeoutRunnable, 5000)
             }
             else -> {
                 // 生物识别不可用，使用传统的Keyguard解锁
