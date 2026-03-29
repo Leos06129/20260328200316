@@ -13,7 +13,8 @@
     <string name="notification_channel_description">屏保服务运行通知</string>
     <string name="notification_title">随机屏保</string>
     <string name="notification_content">屏保服务正在运行，随机显示语句</string>
-    <string name="default_message">今天也要加油哦！</string>
+    <string name="default_message">时时彻知无常</string>
+    <string name="default_message2">刻刻精勤觉知</string>
     <string name="permission_required">需要显示在其他应用上层的权限</string>
     <string name="grant_permission">授予权限</string>
     <string name="settings">设置</string>

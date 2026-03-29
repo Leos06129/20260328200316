@@ -82,8 +82,8 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         val currentMessage = prefs.getString(PREF_MESSAGE, getString(R.string.default_message))
             ?: getString(R.string.default_message)
-        val currentMessage2 = prefs.getString(PREF_MESSAGE2, getString(R.string.default_message))
-            ?: getString(R.string.default_message)
+        val currentMessage2 = prefs.getString(PREF_MESSAGE2, getString(R.string.default_message2))
+            ?: getString(R.string.default_message2)
 
         binding.tvCurrentMessage.text = "语句1: $currentMessage"
         binding.tvCurrentMessage2.text = "语句2: $currentMessage2"

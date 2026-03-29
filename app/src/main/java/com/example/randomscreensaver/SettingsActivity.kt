@@ -40,8 +40,8 @@ class SettingsActivity : AppCompatActivity() {
         // 加载语句2
         val message2 = prefs.getString(
             MainActivity.PREF_MESSAGE2,
-            getString(R.string.default_message)
-        ) ?: getString(R.string.default_message)
+            getString(R.string.default_message2)
+        ) ?: getString(R.string.default_message2)
         binding.etMessage2.setText(message2)
 
         // 加载最小间隔
@@ -109,7 +109,7 @@ class SettingsActivity : AppCompatActivity() {
 
         // 保存两条文字（如果为空则使用默认文字）
         editor.putString(MainActivity.PREF_MESSAGE, message.ifEmpty { getString(R.string.default_message) })
-        editor.putString(MainActivity.PREF_MESSAGE2, message2.ifEmpty { getString(R.string.default_message) })
+        editor.putString(MainActivity.PREF_MESSAGE2, message2.ifEmpty { getString(R.string.default_message2) })
         editor.putInt(MainActivity.PREF_MIN_INTERVAL, minInterval)
         editor.putInt(MainActivity.PREF_MAX_INTERVAL, maxInterval)
         editor.putBoolean("auto_start", binding.switchAutoStart.isChecked)
