@@ -70,41 +70,50 @@ class ScreenService : Service() {
 
     private fun startDisplayLoop() {
         if (!isServiceRunning) return
-
+        
         val prefs = getSharedPreferences(MainActivity.PREFS_NAME, MODE_PRIVATE)
         val message = prefs.getString(MainActivity.PREF_MESSAGE, getString(R.string.default_message))
             ?: getString(R.string.default_message)
         val maxInterval = prefs.getInt(MainActivity.PREF_MAX_INTERVAL, MainActivity.DEFAULT_MAX_INTERVAL)
         val minInterval = prefs.getInt(MainActivity.PREF_MIN_INTERVAL, MainActivity.DEFAULT_MIN_INTERVAL)
         val isScreenLocked = prefs.getBoolean("screen_locked", false)
-
-        val interval = if (isScreenLocked) {
-            Random.nextInt(10, 13) * 1000L
-        } else {
-            Random.nextInt(minInterval, maxInterval + 1) * 1000L
-        }
-
-        Log.d(TAG, "下次显示间隔: ${interval / 1000}秒, 锁屏状态: $isScreenLocked")
-
+        
+        // 计算显示持续时间（在用户设定范围内随机）
+        val displayDuration = Random.nextInt(minInterval, maxInterval + 1) * 1000L
+        
+        Log.d(TAG, "显示持续时间: ${displayDuration / 1000}秒, 锁屏状态: $isScreenLocked")
+        
+        // 立即显示文字内容
+        showFullscreenMessage(message, isScreenLocked, maxInterval, minInterval, displayDuration)
+        
+        // 在显示持续时间结束后，开始下一个显示循环（先黑屏，后等待最短间隔）
         handler.postDelayed({
             if (isServiceRunning) {
-                showFullscreenMessage(message, isScreenLocked, maxInterval, minInterval)
-                startDisplayLoop()
+                // 文字显示结束，进入黑屏状态
+                // 等待最短间隔后开始下一个显示循环
+                Log.d(TAG, "文字显示结束，进入黑屏状态")
+                handler.postDelayed({
+                    if (isServiceRunning) {
+                        startDisplayLoop()
+                    }
+                }, minInterval * 1000L)
             }
-        }, interval)
+        }, displayDuration)
     }
 
     private fun showFullscreenMessage(
         message: String,
         isLocked: Boolean,
         maxInterval: Int,
-        minInterval: Int
+        minInterval: Int,
+        displayDuration: Long
     ) {
         val intent = Intent(this, FullscreenActivity::class.java).apply {
             putExtra(FullscreenActivity.EXTRA_MESSAGE, message)
             putExtra(FullscreenActivity.EXTRA_IS_LOCKED, isLocked)
             putExtra(FullscreenActivity.EXTRA_MAX_INTERVAL, maxInterval)
             putExtra(FullscreenActivity.EXTRA_MIN_INTERVAL, minInterval)
+            putExtra(FullscreenActivity.EXTRA_DISPLAY_DURATION, displayDuration)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         startActivity(intent)
