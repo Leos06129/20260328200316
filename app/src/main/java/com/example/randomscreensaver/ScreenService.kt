@@ -2,6 +2,7 @@ package com.example.randomscreensaver
 
 import android.app.Service
 import android.content.Intent
+import android.media.MediaPlayer
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
@@ -12,6 +13,8 @@ class ScreenService : Service() {
 
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var notificationHelper: NotificationHelper
+    private var mediaPlayer: MediaPlayer? = null
+    private var cuckooRunnable: Runnable? = null
 
     companion object {
         private const val TAG = "ScreenService"
@@ -55,6 +58,9 @@ class ScreenService : Service() {
         val notification = notificationHelper.createServiceNotification()
         startForeground(NotificationHelper.NOTIFICATION_ID, notification)
 
+        // 启动布谷鸟叫声定时器
+        startCuckooSoundTimer()
+
         startDisplayLoop()
     }
 
@@ -63,6 +69,9 @@ class ScreenService : Service() {
 
         isServiceRunning = false
         Log.d(TAG, "停止屏保服务")
+
+        // 停止布谷鸟叫声
+        stopCuckooSoundTimer()
 
         handler.removeCallbacksAndMessages(null)
         stopForeground(true)
@@ -124,6 +133,70 @@ class ScreenService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    /**
+     * 启动布谷鸟叫声定时器
+     * 每隔2~5分钟随机播放一次布谷鸟叫声
+     */
+    private fun startCuckooSoundTimer() {
+        scheduleNextCuckooSound()
+    }
+
+    /**
+     * 安排下一次布谷鸟叫声
+     */
+    private fun scheduleNextCuckooSound() {
+        if (!isServiceRunning) return
+
+        // 随机等待2~5分钟（120000~300000毫秒）
+        val nextInterval = Random.nextLong(120000, 300001)
+
+        Log.d(TAG, "布谷鸟叫声定时器: ${nextInterval / 1000}秒后播放")
+
+        cuckooRunnable = Runnable {
+            if (isServiceRunning) {
+                playCuckooSound()
+                // 播放完后继续安排下一次
+                scheduleNextCuckooSound()
+            }
+        }
+
+        handler.postDelayed(cuckooRunnable!!, nextInterval)
+    }
+
+    /**
+     * 播放布谷鸟叫声
+     */
+    private fun playCuckooSound() {
+        try {
+            // 尝试播放raw资源中的布谷鸟叫声
+            mediaPlayer?.release()
+            mediaPlayer = MediaPlayer.create(this, R.raw.cuckoo_sound)
+            if (mediaPlayer != null) {
+                mediaPlayer?.setOnCompletionListener {
+                    Log.d(TAG, "布谷鸟叫声播放完成")
+                }
+                mediaPlayer?.start()
+                Log.d(TAG, "播放布谷鸟叫声")
+            } else {
+                Log.w(TAG, "未找到布谷鸟叫声音频文件 (res/raw/cuckoo_sound)")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "播放布谷鸟叫声失败: ${e.message}")
+        }
+    }
+
+    /**
+     * 停止布谷鸟叫声定时器
+     */
+    private fun stopCuckooSoundTimer() {
+        cuckooRunnable?.let {
+            handler.removeCallbacks(it)
+        }
+        cuckooRunnable = null
+        mediaPlayer?.release()
+        mediaPlayer = null
+    }
 
     override fun onDestroy() {
         super.onDestroy()
