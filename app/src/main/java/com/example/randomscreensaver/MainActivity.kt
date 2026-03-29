@@ -91,7 +91,12 @@ class MainActivity : AppCompatActivity() {
         val minInterval = prefs.getInt(PREF_MIN_INTERVAL, DEFAULT_MIN_INTERVAL)
         val maxInterval = prefs.getInt(PREF_MAX_INTERVAL, DEFAULT_MAX_INTERVAL)
         binding.tvCurrentInterval.text = "显示间隔: ${minInterval}-${maxInterval}秒"
-        
+
+        // 更新声音设置显示
+        val currentSound = prefs.getString(PREF_SOUND, SOUND_CUCKOO) ?: SOUND_CUCKOO
+        val soundDisplay = if (currentSound == SOUND_CUCKOO) "布谷鸟叫声" else "系统默认"
+        binding.tvCurrentSound.text = "当前声音: $soundDisplay"
+
         // 更新权限状态
         binding.tvPermissionStatus.text = if (checkOverlayPermission()) {
             "权限状态: 已授权"
@@ -217,7 +222,10 @@ class MainActivity : AppCompatActivity() {
         const val PREF_MESSAGE2 = "message2"  // 第二条文字
         const val PREF_MAX_INTERVAL = "max_interval"
         const val PREF_MIN_INTERVAL = "min_interval"
+        const val PREF_SOUND = "sound"  // 声音设置
         const val DEFAULT_MAX_INTERVAL = 20
         const val DEFAULT_MIN_INTERVAL = 10
+        const val SOUND_CUCKOO = "cuckoo"  // 布谷鸟声音
+        const val SOUND_DEFAULT = "default"  // 系统默认声音
     }
 }

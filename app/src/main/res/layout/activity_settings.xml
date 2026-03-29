@@ -90,6 +90,23 @@
             android:textColorHint="#888888"
             android:background="@drawable/edit_text_background" />
 
+        <!-- 声音选择 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="8dp"
+            android:text="提醒声音"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/spinnerSound"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginBottom="16dp"
+            android:background="@drawable/edit_text_background"
+            android:padding="12dp" />
+
         <!-- 自动启动 -->
         <LinearLayout
             android:layout_width="match_parent"

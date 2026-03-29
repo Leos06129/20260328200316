@@ -1,14 +1,18 @@
 package com.example.randomscreensaver
 
 import android.os.Bundle
+import android.view.View
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
 import com.example.randomscreensaver.databinding.ActivitySettingsBinding
 
 class SettingsActivity : AppCompatActivity() {
-    
+
     private lateinit var binding: ActivitySettingsBinding
+    private var selectedSound: String = MainActivity.SOUND_CUCKOO
     
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -61,6 +65,37 @@ class SettingsActivity : AppCompatActivity() {
         // 加载自动启动设置
         val autoStart = prefs.getBoolean("auto_start", false)
         binding.switchAutoStart.isChecked = autoStart
+
+        // 加载声音设置并初始化Spinner
+        selectedSound = prefs.getString(MainActivity.PREF_SOUND, MainActivity.SOUND_CUCKOO)
+            ?: MainActivity.SOUND_CUCKOO
+        initSoundSpinner()
+    }
+
+    private fun initSoundSpinner() {
+        val soundOptions = arrayOf("布谷鸟叫声", "系统默认声音")
+        val soundValues = arrayOf(MainActivity.SOUND_CUCKOO, MainActivity.SOUND_DEFAULT)
+
+        val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, soundOptions)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        binding.spinnerSound.adapter = adapter
+
+        // 设置当前选中的声音
+        val currentIndex = soundValues.indexOf(selectedSound)
+        if (currentIndex >= 0) {
+            binding.spinnerSound.setSelection(currentIndex)
+        }
+
+        // 监听选择变化
+        binding.spinnerSound.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                selectedSound = soundValues[position]
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>?) {
+                selectedSound = MainActivity.SOUND_CUCKOO
+            }
+        }
     }
     
     private fun saveSettings() {
@@ -113,6 +148,7 @@ class SettingsActivity : AppCompatActivity() {
         editor.putInt(MainActivity.PREF_MIN_INTERVAL, minInterval)
         editor.putInt(MainActivity.PREF_MAX_INTERVAL, maxInterval)
         editor.putBoolean("auto_start", binding.switchAutoStart.isChecked)
+        editor.putString(MainActivity.PREF_SOUND, selectedSound)
 
         if (editor.commit()) {
             Toast.makeText(this, "设置已保存", Toast.LENGTH_SHORT).show()

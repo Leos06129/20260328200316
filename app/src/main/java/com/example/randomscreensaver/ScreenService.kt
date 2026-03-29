@@ -155,7 +155,7 @@ class ScreenService : Service() {
 
         cuckooRunnable = Runnable {
             if (isServiceRunning) {
-                playCuckooSound()
+                playReminderSound()
                 // 播放完后继续安排下一次
                 scheduleNextCuckooSound()
             }
@@ -165,24 +165,39 @@ class ScreenService : Service() {
     }
 
     /**
-     * 播放布谷鸟叫声
+     * 播放提醒声音
      */
-    private fun playCuckooSound() {
+    private fun playReminderSound() {
         try {
-            // 尝试播放raw资源中的布谷鸟叫声
+            val prefs = getSharedPreferences(MainActivity.PREFS_NAME, MODE_PRIVATE)
+            val soundType = prefs.getString(MainActivity.PREF_SOUND, MainActivity.SOUND_CUCKOO)
+                ?: MainActivity.SOUND_CUCKOO
+
             mediaPlayer?.release()
-            mediaPlayer = MediaPlayer.create(this, R.raw.cuckoo_sound)
-            if (mediaPlayer != null) {
-                mediaPlayer?.setOnCompletionListener {
-                    Log.d(TAG, "布谷鸟叫声播放完成")
+
+            if (soundType == MainActivity.SOUND_CUCKOO) {
+                // 播放布谷鸟叫声
+                mediaPlayer = MediaPlayer.create(this, R.raw.cuckoo_sound)
+                if (mediaPlayer != null) {
+                    mediaPlayer?.setOnCompletionListener {
+                        Log.d(TAG, "布谷鸟叫声播放完成")
+                    }
+                    mediaPlayer?.start()
+                    Log.d(TAG, "播放布谷鸟叫声")
+                } else {
+                    Log.w(TAG, "未找到布谷鸟叫声音频文件")
                 }
-                mediaPlayer?.start()
-                Log.d(TAG, "播放布谷鸟叫声")
             } else {
-                Log.w(TAG, "未找到布谷鸟叫声音频文件 (res/raw/cuckoo_sound)")
+                // 播放系统默认通知声音
+                val notification = android.media.RingtoneManager.getDefaultUri(
+                    android.media.RingtoneManager.TYPE_NOTIFICATION
+                )
+                val ringtone = android.media.RingtoneManager.getRingtone(applicationContext, notification)
+                ringtone?.play()
+                Log.d(TAG, "播放系统默认通知声音")
             }
         } catch (e: Exception) {
-            Log.e(TAG, "播放布谷鸟叫声失败: ${e.message}")
+            Log.e(TAG, "播放提醒声音失败: ${e.message}")
         }
     }
 
