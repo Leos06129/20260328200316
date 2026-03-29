@@ -30,6 +30,7 @@ class FullscreenActivity : AppCompatActivity() {
         const val EXTRA_MAX_INTERVAL = "max_interval"
         const val EXTRA_MIN_INTERVAL = "min_interval"
         const val EXTRA_DISPLAY_DURATION = "display_duration"
+        const val AUTHENTICATION_REQUEST_CODE = 1002
 
         fun start(activity: Activity, message: String, isLocked: Boolean, maxInterval: Int, minInterval: Int, displayDuration: Long) {
             val intent = Intent(activity, FullscreenActivity::class.java).apply {
@@ -274,10 +275,6 @@ class FullscreenActivity : AppCompatActivity() {
             }
             // 认证失败则保持锁定状态
         }
-    }
-    
-    companion object {
-        const val AUTHENTICATION_REQUEST_CODE = 1002
     }
     
 }
