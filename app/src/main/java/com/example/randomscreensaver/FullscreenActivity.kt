@@ -125,36 +125,42 @@ class FullscreenActivity : AppCompatActivity() {
         val screenWidth = displayMetrics.widthPixels
         val screenHeight = displayMetrics.heightPixels
         
-        // 计算文本宽度和高度
-        val textPaint = textView.paint
-        textPaint.textSize = randomSize * displayMetrics.scaledDensity
-        val textWidth = textPaint.measureText(message)
-        val fontMetrics = textPaint.fontMetrics
-        val textHeight = fontMetrics.descent - fontMetrics.ascent
-        
         // 边距
         val padding = 40f * displayMetrics.density
         
-        // 确保文字完全显示在屏幕内（左右上下都留边距）
-        val maxX = screenWidth - textWidth - padding * 2
-        val maxY = screenHeight - textHeight - padding * 2
-        
-        // 生成随机位置，确保在屏幕内
-        val randomX = if (maxX > padding) Random.nextInt(padding.toInt(), maxX.toInt()).toFloat() else padding
-        val randomY = if (maxY > padding) Random.nextInt(padding.toInt(), maxY.toInt()).toFloat() else padding
-        
-        // 设置TextView属性
+        // 先设置TextView的基本属性，以便准确测量文字尺寸
         textView.apply {
             text = message
             setTextColor(randomColor)
             textSize = randomSize
             setSingleLine()
             setPadding(padding.toInt(), padding.toInt(), padding.toInt(), padding.toInt())
-            x = randomX
-            y = randomY - textHeight // 调整y坐标为baseline
-            alpha = 0f
             visibility = View.VISIBLE
+            alpha = 0f
         }
+        
+        // 强制布局完成后测量实际文字尺寸
+        textView.measure(
+            View.MeasureSpec.makeMeasureSpec(screenWidth, View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(screenHeight, View.MeasureSpec.AT_MOST)
+        )
+        
+        // 获取测量后的实际尺寸
+        val textWidth = textView.measuredWidth.toFloat()
+        val textHeight = textView.measuredHeight.toFloat()
+        
+        // 确保文字完全显示在屏幕内（左右上下都留边距）
+        // 计算可移动的最大范围
+        val maxX = (screenWidth - textWidth - padding * 2).coerceAtLeast(0f)
+        val maxY = (screenHeight - textHeight - padding * 2).coerceAtLeast(0f)
+        
+        // 生成随机位置，确保在屏幕内
+        val randomX = if (maxX > 0) Random.nextFloat() * maxX + padding else padding
+        val randomY = if (maxY > 0) Random.nextFloat() * maxY + padding else padding
+        
+        // 设置位置
+        textView.x = randomX
+        textView.y = randomY
         
         // 淡入动画
         textView.animate()
