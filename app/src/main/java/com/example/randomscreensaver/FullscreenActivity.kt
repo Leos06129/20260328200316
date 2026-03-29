@@ -23,6 +23,10 @@ class FullscreenActivity : AppCompatActivity() {
     private lateinit var textView: TextView
     private val handler = Handler(Looper.getMainLooper())
     private var isLockedScreen = false
+    private var currentMessage: String = ""
+    private var maxInterval: Int = MainActivity.DEFAULT_MAX_INTERVAL
+    private var minInterval: Int = MainActivity.DEFAULT_MIN_INTERVAL
+    private var displayDuration: Long = 10000L
     
     companion object {
         const val EXTRA_MESSAGE = "message"
@@ -78,14 +82,14 @@ class FullscreenActivity : AppCompatActivity() {
         }
         
         // 获取参数
-        val message = intent.getStringExtra(EXTRA_MESSAGE) ?: getString(R.string.default_message)
+        currentMessage = intent.getStringExtra(EXTRA_MESSAGE) ?: getString(R.string.default_message)
         isLockedScreen = intent.getBooleanExtra(EXTRA_IS_LOCKED, false)
-        val maxInterval = intent.getIntExtra(EXTRA_MAX_INTERVAL, MainActivity.DEFAULT_MAX_INTERVAL)
-        val minInterval = intent.getIntExtra(EXTRA_MIN_INTERVAL, MainActivity.DEFAULT_MIN_INTERVAL)
-        val displayDuration = intent.getLongExtra(EXTRA_DISPLAY_DURATION, 10000L)
+        maxInterval = intent.getIntExtra(EXTRA_MAX_INTERVAL, MainActivity.DEFAULT_MAX_INTERVAL)
+        minInterval = intent.getIntExtra(EXTRA_MIN_INTERVAL, MainActivity.DEFAULT_MIN_INTERVAL)
+        displayDuration = intent.getLongExtra(EXTRA_DISPLAY_DURATION, 10000L)
         
-        // 显示随机文字
-        showRandomMessage(message, maxInterval, minInterval, displayDuration)
+        // 显示随机文字（循环）
+        showRandomMessage(currentMessage)
     }
     
     private fun lockScreen() {
@@ -104,7 +108,7 @@ class FullscreenActivity : AppCompatActivity() {
         }
     }
     
-    private fun showRandomMessage(message: String, maxInterval: Int, minInterval: Int, displayDuration: Long) {
+    private fun showRandomMessage(message: String) {
         // 生成随机颜色
         val randomColor = Color.rgb(
             Random.nextInt(256),
@@ -112,35 +116,42 @@ class FullscreenActivity : AppCompatActivity() {
             Random.nextInt(256)
         )
         
-        // 生成随机大小 (20-100sp)
-        val randomSize = Random.nextInt(20, 101).toFloat()
+        // 生成随机大小 (20-60sp，避免太大显示不全)
+        val randomSize = Random.nextInt(20, 61).toFloat()
         
         // 获取屏幕尺寸
         val displayMetrics = resources.displayMetrics
         val screenWidth = displayMetrics.widthPixels
         val screenHeight = displayMetrics.heightPixels
         
-        // 计算文本宽度（估算）
-        val textPaint = textView.paint
-        textPaint.textSize = randomSize * displayMetrics.scaledDensity
+        // 计算文本宽度和高度
+        val textPaint = textPaint.apply { textSize = randomSize * displayMetrics.scaledDensity }
         val textWidth = textPaint.measureText(message)
+        val fontMetrics = textPaint.fontMetrics
+        val textHeight = fontMetrics.descent - fontMetrics.ascent
         
-        // 确保文字完全显示在屏幕内
-        val maxX = screenWidth - textWidth * 1.2f // 留20%边距
-        val maxY = screenHeight - randomSize * 2 * displayMetrics.scaledDensity // 留一定高度
+        // 边距
+        val padding = 40f * displayMetrics.density
+        
+        // 确保文字完全显示在屏幕内（左右上下都留边距）
+        val maxX = screenWidth - textWidth - padding * 2
+        val maxY = screenHeight - textHeight - padding * 2
         
         // 生成随机位置，确保在屏幕内
-        val randomX = if (maxX > 0) Random.nextInt(0, maxX.toInt()).toFloat() else 0f
-        val randomY = if (maxY > 0) Random.nextInt(0, maxY.toInt()).toFloat() else 0f
+        val randomX = if (maxX > padding) Random.nextInt(padding.toInt(), maxX.toInt()).toFloat() else padding
+        val randomY = if (maxY > padding) Random.nextInt(padding.toInt(), maxY.toInt()).toFloat() else padding
         
         // 设置TextView属性
         textView.apply {
             text = message
             setTextColor(randomColor)
             textSize = randomSize
+            setSingleLine()
+            setPadding(padding.toInt(), padding.toInt(), padding.toInt(), padding.toInt())
             x = randomX
-            y = randomY
+            y = randomY - textHeight // 调整y坐标为baseline
             alpha = 0f
+            visibility = View.VISIBLE
         }
         
         // 淡入动画
@@ -149,19 +160,33 @@ class FullscreenActivity : AppCompatActivity() {
             .setDuration(500)
             .start()
         
-        // 使用传入的显示持续时间
-        val interval = displayDuration
-        
-        // 淡出并关闭Activity
+        // 显示持续时间后淡出
         handler.postDelayed({
             textView.animate()
                 .alpha(0f)
                 .setDuration(500)
                 .withEndAction {
-                    finish()
+                    // 文字淡出后，保持黑屏，等待随机间隔后显示新内容
+                    waitAndShowNextMessage()
                 }
                 .start()
-        }, interval - 500) // 提前500ms开始淡出
+        }, displayDuration - 500) // 提前500ms开始淡出
+    }
+    
+    private fun waitAndShowNextMessage() {
+        // 生成随机间隔 (minInterval ~ maxInterval，单位毫秒)
+        val nextInterval = Random.nextLong(
+            minInterval.toLong() * 1000,
+            maxInterval.toLong() * 1000
+        )
+        
+        Log.d("FullscreenActivity", "等待下一条消息: ${nextInterval}ms")
+        
+        // 等待随机间隔后显示新消息
+        handler.postDelayed({
+            // 重新生成随机消息（使用相同的消息池）
+            showRandomMessage(currentMessage)
+        }, nextInterval)
     }
     
     private fun hideSystemUI() {
