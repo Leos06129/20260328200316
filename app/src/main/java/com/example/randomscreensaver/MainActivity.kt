@@ -10,6 +10,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.example.randomscreensaver.databinding.ActivityMainBinding
+import kotlin.random.Random
 
 class MainActivity : AppCompatActivity() {
     
@@ -45,7 +46,15 @@ class MainActivity : AppCompatActivity() {
         binding.btnStopService.setOnClickListener {
             stopScreenService()
         }
-        
+
+        binding.btnTestDisplay.setOnClickListener {
+            if (checkOverlayPermission()) {
+                testDisplay()
+            } else {
+                showOverlayPermissionDialog()
+            }
+        }
+
         binding.btnSettings.setOnClickListener {
             val intent = Intent(this, SettingsActivity::class.java)
             startActivity(intent)
@@ -71,10 +80,14 @@ class MainActivity : AppCompatActivity() {
         
         // 更新当前设置显示
         val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
-        val currentMessage = prefs.getString(PREF_MESSAGE, getString(R.string.default_message)) 
+        val currentMessage = prefs.getString(PREF_MESSAGE, getString(R.string.default_message))
             ?: getString(R.string.default_message)
-        binding.tvCurrentMessage.text = "当前语句: $currentMessage"
-        
+        val currentMessage2 = prefs.getString(PREF_MESSAGE2, getString(R.string.default_message))
+            ?: getString(R.string.default_message)
+
+        binding.tvCurrentMessage.text = "语句1: $currentMessage"
+        binding.tvCurrentMessage2.text = "语句2: $currentMessage2"
+
         val minInterval = prefs.getInt(PREF_MIN_INTERVAL, DEFAULT_MIN_INTERVAL)
         val maxInterval = prefs.getInt(PREF_MAX_INTERVAL, DEFAULT_MAX_INTERVAL)
         binding.tvCurrentInterval.text = "显示间隔: ${minInterval}-${maxInterval}秒"
@@ -164,9 +177,26 @@ class MainActivity : AppCompatActivity() {
             action = ScreenService.ACTION_STOP
         }
         stopService(intent)
-        
+
         Toast.makeText(this, "屏保服务已停止", Toast.LENGTH_SHORT).show()
         updateUI()
+    }
+
+    private fun testDisplay() {
+        val prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
+        val message1 = prefs.getString(PREF_MESSAGE, getString(R.string.default_message))
+            ?: getString(R.string.default_message)
+        val message2 = prefs.getString(PREF_MESSAGE2, null)
+        val maxInterval = prefs.getInt(PREF_MAX_INTERVAL, DEFAULT_MAX_INTERVAL)
+        val minInterval = prefs.getInt(PREF_MIN_INTERVAL, DEFAULT_MIN_INTERVAL)
+        val displayDuration = Random.nextInt(minInterval, maxInterval + 1) * 1000L
+
+        LockScreenOverlayManager.show(
+            context = this,
+            message1 = message1,
+            message2 = message2,
+            displayDuration = displayDuration
+        )
     }
     
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
@@ -184,6 +214,7 @@ class MainActivity : AppCompatActivity() {
         private const val REQUEST_CODE_OVERLAY_PERMISSION = 1001
         const val PREFS_NAME = "ScreenSaverPrefs"
         const val PREF_MESSAGE = "message"
+        const val PREF_MESSAGE2 = "message2"  // 第二条文字
         const val PREF_MAX_INTERVAL = "max_interval"
         const val PREF_MIN_INTERVAL = "min_interval"
         const val DEFAULT_MAX_INTERVAL = 20

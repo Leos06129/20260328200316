@@ -16,7 +16,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
-            android:text="显示语句"
+            android:text="显示语句（两条，随机显示一条）"
             android:textSize="16sp"
             android:textStyle="bold" />
 
@@ -24,11 +24,23 @@
             android:id="@+id/etMessage"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="16dp"
-            android:hint="请输入要显示的语句"
+            android:layout_marginBottom="8dp"
+            android:hint="请输入要显示的语句 1"
             android:inputType="textMultiLine"
-            android:minLines="3"
-            android:maxLines="5"
+            android:minLines="2"
+            android:maxLines="3"
+            android:padding="12dp"
+            android:background="@drawable/edit_text_background" />
+
+        <EditText
+            android:id="@+id/etMessage2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginBottom="16dp"
+            android:hint="请输入要显示的语句 2"
+            android:inputType="textMultiLine"
+            android:minLines="2"
+            android:maxLines="3"
             android:padding="12dp"
             android:background="@drawable/edit_text_background" />
 
