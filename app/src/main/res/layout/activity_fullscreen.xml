@@ -14,8 +14,8 @@
         android:textSize="40sp"
         android:textColor="@color/white"
         android:layout_gravity="center"
-        android:maxWidth="90%"
-        android:maxHeight="90%"
+        android:maxWidth="320dp"
+        android:maxHeight="480dp"
         android:ellipsize="none"
         android:singleLine="false"
         android:gravity="center" />
