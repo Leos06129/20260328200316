@@ -117,8 +117,8 @@ class FullscreenActivity : AppCompatActivity() {
             Random.nextInt(256)
         )
         
-        // 生成随机大小 (20-60sp，避免太大显示不全)
-        val randomSize = Random.nextInt(20, 61).toFloat()
+        // 生成随机大小 (16-40sp，减小字体大小范围以避免显示不全)
+        val randomSize = Random.nextInt(16, 41).toFloat()
         
         // 获取屏幕尺寸
         val displayMetrics = resources.displayMetrics
@@ -127,36 +127,41 @@ class FullscreenActivity : AppCompatActivity() {
         
         // 边距
         val padding = 40f * displayMetrics.density
+        val maxTextWidth = screenWidth - padding * 2
         
-        // 先设置TextView的基本属性，以便准确测量文字尺寸
+        // 先设置TextView的基本属性
         textView.apply {
             text = message
             setTextColor(randomColor)
             textSize = randomSize
-            setSingleLine()
+            maxWidth = maxTextWidth.toInt() // 限制最大宽度
             setPadding(padding.toInt(), padding.toInt(), padding.toInt(), padding.toInt())
             visibility = View.VISIBLE
             alpha = 0f
         }
         
-        // 强制布局完成后测量实际文字尺寸
+        // 强制测量实际文字尺寸
         textView.measure(
-            View.MeasureSpec.makeMeasureSpec(screenWidth, View.MeasureSpec.AT_MOST),
-            View.MeasureSpec.makeMeasureSpec(screenHeight, View.MeasureSpec.AT_MOST)
+            View.MeasureSpec.makeMeasureSpec(maxTextWidth.toInt(), View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
         )
+        
+        // 调用 layout 使测量尺寸生效
+        textView.layout(0, 0, textView.measuredWidth, textView.measuredHeight)
         
         // 获取测量后的实际尺寸
         val textWidth = textView.measuredWidth.toFloat()
         val textHeight = textView.measuredHeight.toFloat()
         
-        // 确保文字完全显示在屏幕内（左右上下都留边距）
-        // 计算可移动的最大范围
-        val maxX = (screenWidth - textWidth - padding * 2).coerceAtLeast(0f)
-        val maxY = (screenHeight - textHeight - padding * 2).coerceAtLeast(0f)
+        Log.d("FullscreenActivity", "文字尺寸: ${textWidth}x${textHeight}, 屏幕: ${screenWidth}x${screenHeight}")
         
-        // 生成随机位置，确保在屏幕内
-        val randomX = if (maxX > 0) Random.nextFloat() * maxX + padding else padding
-        val randomY = if (maxY > 0) Random.nextFloat() * maxY + padding else padding
+        // 确保文字完全显示在屏幕内
+        val availableWidth = (screenWidth - textWidth - padding * 2).coerceAtLeast(0f)
+        val availableHeight = (screenHeight - textHeight - padding * 2).coerceAtLeast(0f)
+        
+        // 生成随机位置
+        val randomX = if (availableWidth > 0) padding + Random.nextFloat() * availableWidth else padding
+        val randomY = if (availableHeight > 0) padding + Random.nextFloat() * availableHeight else padding
         
         // 设置位置
         textView.x = randomX
@@ -178,7 +183,7 @@ class FullscreenActivity : AppCompatActivity() {
                     waitAndShowNextMessage()
                 }
                 .start()
-        }, displayDuration - 500) // 提前500ms开始淡出
+        }, displayDuration - 500)
     }
     
     private fun waitAndShowNextMessage() {
@@ -225,6 +230,9 @@ class FullscreenActivity : AppCompatActivity() {
     private var currentDeviceCredentialIntent: Intent? = null
     
     private fun requestAuthentication() {
+        // 取消可能存在的之前的消息显示
+        handler.removeCallbacksAndMessages(null)
+        
         // 检查生物识别认证是否可用
         val biometricManager = BiometricManager.from(this)
         when (biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)) {
@@ -241,22 +249,30 @@ class FullscreenActivity : AppCompatActivity() {
                     object : BiometricPrompt.AuthenticationCallback() {
                         override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                             super.onAuthenticationSucceeded(result)
-                            // 取消超时计时器
-                            handler.removeCallbacksAndMessages(null)
+                            Log.d("FullscreenActivity", "生物识别认证成功")
                             // 认证成功，解锁屏幕并关闭Activity
                             unlockScreenAndFinish()
                         }
                         
                         override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                             super.onAuthenticationError(errorCode, errString)
-                            // 取消超时计时器
-                            handler.removeCallbacksAndMessages(null)
-                            // 认证错误，5秒后自动重试显示文字
-                            restartDisplayCycle()
+                            Log.d("FullscreenActivity", "生物识别认证错误: $errorCode, $errString")
+                            // 用户取消时直接退出，不要重新显示
+                            if (errorCode == BiometricPrompt.ERROR_USER_CANCELED || 
+                                errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
+                                errorCode == BiometricPrompt.ERROR_CANCELED) {
+                                finish()
+                            } else {
+                                // 其他错误，5秒后自动回到屏保循环
+                                handler.postDelayed({
+                                    restartDisplayCycle()
+                                }, 5000)
+                            }
                         }
                         
                         override fun onAuthenticationFailed() {
                             super.onAuthenticationFailed()
+                            Log.d("FullscreenActivity", "生物识别认证失败")
                             // 认证失败，不取消，等待用户重试或超时
                         }
                     })
@@ -266,8 +282,9 @@ class FullscreenActivity : AppCompatActivity() {
                 
                 // 5秒超时，取消认证并回到屏保循环
                 handler.postDelayed({
-                    biometricPrompt.cancelAuthentication()
-                    currentBiometricPrompt = null
+                    if (biometricPrompt.isStarted) {
+                        biometricPrompt.cancelAuthentication()
+                    }
                     restartDisplayCycle()
                 }, 5000)
             }
@@ -310,22 +327,29 @@ class FullscreenActivity : AppCompatActivity() {
     }
     
     private fun unlockScreenAndFinish() {
-        // 清除锁定标志
-        window.clearFlags(
-            WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
-            or WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
-            or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-            or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-        )
+        Log.d("FullscreenActivity", "unlockScreenAndFinish 被调用")
         
-        // 停止服务
-        val serviceIntent = Intent(this, ScreenService::class.java).apply {
-            action = ScreenService.ACTION_STOP
+        try {
+            // 清除锁定标志
+            window.clearFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
+                or WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+                or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+                or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+            )
+            
+            // 停止服务
+            val serviceIntent = Intent(this, ScreenService::class.java).apply {
+                action = ScreenService.ACTION_STOP
+            }
+            stopService(serviceIntent)
+            
+            // 强制关闭Activity
+            finish()
+            Log.d("FullscreenActivity", "Activity 已关闭")
+        } catch (e: Exception) {
+            Log.e("FullscreenActivity", "关闭Activity失败: ${e.message}")
         }
-        stopService(serviceIntent)
-        
-        // 关闭Activity
-        finish()
     }
     
     private fun unlockWithKeyguard() {
