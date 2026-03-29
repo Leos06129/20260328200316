@@ -9,13 +9,15 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 
-object NotificationHelper {
-    
-    private const val CHANNEL_ID = "screen_saver_channel"
-    private const val CHANNEL_NAME = "屏保通知"
-    private const val NOTIFICATION_ID = 1001
-    
-    fun createNotificationChannel(context: Context) {
+class NotificationHelper(private val context: Context) {
+
+    companion object {
+        const val CHANNEL_ID = "screen_saver_channel"
+        private const val CHANNEL_NAME = "屏保通知"
+        const val NOTIFICATION_ID = 1001
+    }
+
+    fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
@@ -26,14 +28,13 @@ object NotificationHelper {
                 setShowBadge(false)
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
             }
-            
-            val notificationManager = context.getSystemService(NotificationManager::class.java)
+            val notificationManager =
+                context.getSystemService(NotificationManager::class.java)
             notificationManager.createNotificationChannel(channel)
         }
     }
-    
-    fun createNotification(context: Context): Notification {
-        // 点击通知打开应用
+
+    fun createServiceNotification(): Notification {
         val intent = Intent(context, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
             context,
@@ -41,8 +42,7 @@ object NotificationHelper {
             intent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        
-        // 创建停止服务按钮
+
         val stopIntent = Intent(context, ScreenService::class.java).apply {
             action = ScreenService.ACTION_STOP
         }
@@ -52,7 +52,7 @@ object NotificationHelper {
             stopIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        
+
         return NotificationCompat.Builder(context, CHANNEL_ID)
             .setContentTitle("随机屏保")
             .setContentText("屏保服务正在运行")

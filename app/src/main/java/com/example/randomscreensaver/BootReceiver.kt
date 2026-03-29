@@ -3,7 +3,7 @@ package com.example.randomscreensaver
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.SharedPreferences
+import android.os.Build
 import android.util.Log
 
 class BootReceiver : BroadcastReceiver() {
@@ -17,7 +17,7 @@ class BootReceiver : BroadcastReceiver() {
             Log.d(TAG, "设备启动完成")
             
             // 检查是否需要在开机时自动启动服务
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
             val autoStart = prefs.getBoolean("auto_start", false)
             
             if (autoStart) {

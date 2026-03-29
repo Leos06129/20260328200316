@@ -49,29 +49,29 @@ object Utils {
     
     // 获取常规状态下的间隔时间
     fun getNormalScreenInterval(context: Context): Long {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val min = prefs.getInt(PREF_MIN_INTERVAL, DEFAULT_MIN_INTERVAL)
-        val max = prefs.getInt(PREF_MAX_INTERVAL, DEFAULT_MAX_INTERVAL)
+        val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        val min = prefs.getInt(MainActivity.PREF_MIN_INTERVAL, MainActivity.DEFAULT_MIN_INTERVAL)
+        val max = prefs.getInt(MainActivity.PREF_MAX_INTERVAL, MainActivity.DEFAULT_MAX_INTERVAL)
         
         return Random().nextInt(max - min + 1) + min * 1000L
     }
     
     // 获取当前显示的消息
     fun getDisplayMessage(context: Context): String {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getString(PREF_MESSAGE, context.getString(R.string.default_message))
+        val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(MainActivity.PREF_MESSAGE, context.getString(R.string.default_message))
             ?: context.getString(R.string.default_message)
     }
     
     // 检查服务是否正在运行
     fun isServiceRunning(context: Context): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getBoolean("service_running", false)
     }
     
     // 设置服务运行状态
     fun setServiceRunning(context: Context, isRunning: Boolean) {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().putBoolean("service_running", isRunning).apply()
     }
     
