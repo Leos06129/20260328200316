@@ -125,7 +125,8 @@ class FullscreenActivity : AppCompatActivity() {
         val screenHeight = displayMetrics.heightPixels
         
         // 计算文本宽度和高度
-        val textPaint = textPaint.apply { textSize = randomSize * displayMetrics.scaledDensity }
+        val textPaint = textView.paint
+        textPaint.textSize = randomSize * displayMetrics.scaledDensity
         val textWidth = textPaint.measureText(message)
         val fontMetrics = textPaint.fontMetrics
         val textHeight = fontMetrics.descent - fontMetrics.ascent
