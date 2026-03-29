@@ -2,6 +2,7 @@ package com.example.randomscreensaver
 
 import android.app.Activity
 import android.content.Context
+import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.Handler
@@ -95,7 +96,7 @@ class LockScreenOverlayManager(private val context: Context) {
 
             // 设置布局参数
             layoutParams.gravity = Gravity.CENTER
-            layoutParams.screenOrientation = Activity.SCREEN_ORIENTATION_PORTRAIT
+            layoutParams.screenOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
 
             // 创建覆盖层视图
             overlayView = createOverlayView(message)
