@@ -24,6 +24,17 @@ class FullscreenActivity : AppCompatActivity() {
         const val EXTRA_IS_LOCKED = "is_locked"
         const val EXTRA_MAX_INTERVAL = "max_interval"
         const val EXTRA_MIN_INTERVAL = "min_interval"
+
+        fun start(activity: Activity, message: String, isLocked: Boolean, maxInterval: Int, minInterval: Int) {
+            val intent = Intent(activity, FullscreenActivity::class.java).apply {
+                putExtra(EXTRA_MESSAGE, message)
+                putExtra(EXTRA_IS_LOCKED, isLocked)
+                putExtra(EXTRA_MAX_INTERVAL, maxInterval)
+                putExtra(EXTRA_MIN_INTERVAL, minInterval)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            activity.startActivity(intent)
+        }
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -136,17 +147,4 @@ class FullscreenActivity : AppCompatActivity() {
         handler.removeCallbacksAndMessages(null)
     }
     
-    // 静态方法用于启动全屏显示
-    companion object {
-        fun start(activity: Activity, message: String, isLocked: Boolean, maxInterval: Int, minInterval: Int) {
-            val intent = Intent(activity, FullscreenActivity::class.java).apply {
-                putExtra(EXTRA_MESSAGE, message)
-                putExtra(EXTRA_IS_LOCKED, isLocked)
-                putExtra(EXTRA_MAX_INTERVAL, maxInterval)
-                putExtra(EXTRA_MIN_INTERVAL, minInterval)
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            activity.startActivity(intent)
-        }
-    }
 }
