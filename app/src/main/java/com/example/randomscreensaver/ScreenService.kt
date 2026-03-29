@@ -17,6 +17,7 @@ class ScreenService : Service() {
         private const val TAG = "ScreenService"
         const val ACTION_START = "action_start"
         const val ACTION_STOP = "action_stop"
+        const val EXTRA_MESSAGE2 = "message2"
 
         // 供 MainActivity 查询服务是否运行
         var isServiceRunning = false
@@ -74,17 +75,18 @@ class ScreenService : Service() {
         val prefs = getSharedPreferences(MainActivity.PREFS_NAME, MODE_PRIVATE)
         val message = prefs.getString(MainActivity.PREF_MESSAGE, getString(R.string.default_message))
             ?: getString(R.string.default_message)
+        val message2 = prefs.getString(MainActivity.PREF_MESSAGE2, null)
         val maxInterval = prefs.getInt(MainActivity.PREF_MAX_INTERVAL, MainActivity.DEFAULT_MAX_INTERVAL)
         val minInterval = prefs.getInt(MainActivity.PREF_MIN_INTERVAL, MainActivity.DEFAULT_MIN_INTERVAL)
         val isScreenLocked = prefs.getBoolean("screen_locked", false)
-        
+
         // 计算显示持续时间（在用户设定范围内随机）
         val displayDuration = Random.nextInt(minInterval, maxInterval + 1) * 1000L
-        
+
         Log.d(TAG, "显示持续时间: ${displayDuration / 1000}秒, 锁屏状态: $isScreenLocked")
-        
+
         // 立即显示文字内容
-        showFullscreenMessage(message, isScreenLocked, maxInterval, minInterval, displayDuration)
+        showFullscreenMessage(message, message2, isScreenLocked, maxInterval, minInterval, displayDuration)
         
         // 在显示持续时间结束后，开始下一个显示循环（先黑屏，后等待最短间隔）
         handler.postDelayed({
@@ -103,6 +105,7 @@ class ScreenService : Service() {
 
     private fun showFullscreenMessage(
         message: String,
+        message2: String?,
         isLocked: Boolean,
         maxInterval: Int,
         minInterval: Int,
@@ -110,6 +113,7 @@ class ScreenService : Service() {
     ) {
         val intent = Intent(this, FullscreenActivity::class.java).apply {
             putExtra(FullscreenActivity.EXTRA_MESSAGE, message)
+            putExtra(EXTRA_MESSAGE2, message2)
             putExtra(FullscreenActivity.EXTRA_IS_LOCKED, isLocked)
             putExtra(FullscreenActivity.EXTRA_MAX_INTERVAL, maxInterval)
             putExtra(FullscreenActivity.EXTRA_MIN_INTERVAL, minInterval)

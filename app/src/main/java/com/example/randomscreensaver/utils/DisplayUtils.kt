@@ -11,26 +11,29 @@ object DisplayUtils {
     
     fun showRandomMessage(context: Context, isScreenLocked: Boolean) {
         val prefs = context.getSharedPreferences(MainActivity.PREFS_NAME, Context.MODE_PRIVATE)
-        
+
         // 获取设置
         val message = prefs.getString(
-            MainActivity.PREF_MESSAGE, 
+            MainActivity.PREF_MESSAGE,
             "今天也要加油哦！"
         ) ?: "今天也要加油哦！"
-        
+
+        val message2 = prefs.getString(MainActivity.PREF_MESSAGE2, null)
+
         val minInterval = prefs.getInt(
-            MainActivity.PREF_MIN_INTERVAL, 
+            MainActivity.PREF_MIN_INTERVAL,
             MainActivity.DEFAULT_MIN_INTERVAL
         )
-        
+
         val maxInterval = prefs.getInt(
-            MainActivity.PREF_MAX_INTERVAL, 
+            MainActivity.PREF_MAX_INTERVAL,
             MainActivity.DEFAULT_MAX_INTERVAL
         )
-        
+
         // 启动全屏显示
         val intent = Intent(context, FullscreenActivity::class.java).apply {
             putExtra(FullscreenActivity.EXTRA_MESSAGE, message)
+            putExtra(FullscreenActivity.EXTRA_MESSAGE2, message2)
             putExtra(FullscreenActivity.EXTRA_IS_LOCKED, isScreenLocked)
             putExtra(FullscreenActivity.EXTRA_MAX_INTERVAL, maxInterval)
             putExtra(FullscreenActivity.EXTRA_MIN_INTERVAL, minInterval)
