@@ -215,6 +215,9 @@ class FullscreenActivity : AppCompatActivity() {
         handler.removeCallbacksAndMessages(null)
     }
     
+    private var currentBiometricPrompt: BiometricPrompt? = null
+    private var currentDeviceCredentialIntent: Intent? = null
+    
     private fun requestAuthentication() {
         // 检查生物识别认证是否可用
         val biometricManager = BiometricManager.from(this)
@@ -232,28 +235,72 @@ class FullscreenActivity : AppCompatActivity() {
                     object : BiometricPrompt.AuthenticationCallback() {
                         override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
                             super.onAuthenticationSucceeded(result)
+                            // 取消超时计时器
+                            handler.removeCallbacksAndMessages(null)
                             // 认证成功，解锁屏幕并关闭Activity
                             unlockScreenAndFinish()
                         }
                         
                         override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                             super.onAuthenticationError(errorCode, errString)
-                            // 认证错误，保持锁定状态
+                            // 取消超时计时器
+                            handler.removeCallbacksAndMessages(null)
+                            // 认证错误，5秒后自动重试显示文字
+                            restartDisplayCycle()
                         }
                         
                         override fun onAuthenticationFailed() {
                             super.onAuthenticationFailed()
-                            // 认证失败，保持锁定状态
+                            // 认证失败，不取消，等待用户重试或超时
                         }
                     })
                 
+                currentBiometricPrompt = biometricPrompt
                 biometricPrompt.authenticate(promptInfo)
+                
+                // 5秒超时，取消认证并回到屏保循环
+                handler.postDelayed({
+                    biometricPrompt.cancelAuthentication()
+                    currentBiometricPrompt = null
+                    restartDisplayCycle()
+                }, 5000)
             }
             else -> {
                 // 生物识别不可用，使用传统的Keyguard解锁
-                unlockWithKeyguard()
+                requestKeyguardWithTimeout()
             }
         }
+    }
+    
+    private fun requestKeyguardWithTimeout() {
+        val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val intent = keyguardManager.createConfirmDeviceCredentialIntent(
+                "解锁屏保", "需要解锁才能使用设备")
+            if (intent != null) {
+                currentDeviceCredentialIntent = intent
+                startActivityForResult(intent, AUTHENTICATION_REQUEST_CODE)
+                
+                // 5秒超时
+                handler.postDelayed({
+                    // 结束当前Activity，重新启动以回到屏保循环
+                    finish()
+                    // 这里不会重新启动，因为Activity销毁后ScreenService会继续运行
+                }, 5000)
+            } else {
+                // 无法创建Keyguard，直接解锁
+                unlockScreenAndFinish()
+            }
+        } else {
+            // 旧版本Android，直接解锁
+            unlockScreenAndFinish()
+        }
+    }
+    
+    private fun restartDisplayCycle() {
+        // 重新开始显示循环
+        showRandomMessage(currentMessage)
     }
     
     private fun unlockScreenAndFinish() {
