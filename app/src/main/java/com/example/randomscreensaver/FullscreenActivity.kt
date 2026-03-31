@@ -10,6 +10,7 @@ import android.app.KeyguardManager
 import android.content.Intent
 import android.graphics.Color
 import android.util.Log
+import android.util.TypedValue
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
@@ -171,9 +172,9 @@ class FullscreenActivity : AppCompatActivity() {
 
         Log.d("FullscreenActivity", "显示模式: $displayMode, 内容: $displayText")
 
-        // 将文字分割成词（中文按字，英文按词）
+        // 将文字分割成显示单元（中文按两个字一组，英文按词）
         val words = splitTextIntoWords(displayText)
-        Log.d("FullscreenActivity", "分割成 ${words.size} 个词: $words")
+        Log.d("FullscreenActivity", "分割成 ${words.size} 个显示单元: $words")
 
         // 逐个显示词语
         showWordsSequentially(words, 0)
@@ -186,36 +187,51 @@ class FullscreenActivity : AppCompatActivity() {
 
     private fun splitTextIntoWords(text: String): List<String> {
         val words = mutableListOf<String>()
-        val sb = StringBuilder()
+        val chineseBuffer = StringBuilder()
+        val otherBuffer = StringBuilder()
 
-        for (char in text) {
-            when {
-                // 中文字符：每个字作为一个词
-                char.code in 0x4E00..0x9FFF || char.code in 0x3400..0x4DBF -> {
-                    if (sb.isNotEmpty()) {
-                        words.add(sb.toString())
-                        sb.clear()
-                    }
-                    words.add(char.toString())
-                }
-                // 空格：分隔英文单词
-                char.isWhitespace() -> {
-                    if (sb.isNotEmpty()) {
-                        words.add(sb.toString())
-                        sb.clear()
-                    }
-                }
-                // 英文和其他字符：累积
-                else -> sb.append(char)
+        fun flushChineseBuffer() {
+            if (chineseBuffer.isNotEmpty()) {
+                words.add(chineseBuffer.toString())
+                chineseBuffer.clear()
             }
         }
 
-        // 添加最后一个词
-        if (sb.isNotEmpty()) {
-            words.add(sb.toString())
+        fun flushOtherBuffer() {
+            if (otherBuffer.isNotEmpty()) {
+                words.add(otherBuffer.toString())
+                otherBuffer.clear()
+            }
         }
 
+        for (char in text) {
+            when {
+                isChineseCharacter(char) -> {
+                    flushOtherBuffer()
+                    chineseBuffer.append(char)
+                    if (chineseBuffer.length == 2) {
+                        flushChineseBuffer()
+                    }
+                }
+                char.isWhitespace() -> {
+                    flushChineseBuffer()
+                    flushOtherBuffer()
+                }
+                else -> {
+                    flushChineseBuffer()
+                    otherBuffer.append(char)
+                }
+            }
+        }
+
+        flushChineseBuffer()
+        flushOtherBuffer()
+
         return words
+    }
+
+    private fun isChineseCharacter(char: Char): Boolean {
+        return char.code in 0x4E00..0x9FFF || char.code in 0x3400..0x4DBF
     }
 
     private fun showWordsSequentially(words: List<String>, index: Int) {
@@ -235,7 +251,9 @@ class FullscreenActivity : AppCompatActivity() {
             activeTextViews.add(textView)
 
             // 记录占用区域（加上一些间距）
-            textView.measure(0, 0)
+            val widthMeasureSpec = View.MeasureSpec.makeMeasureSpec(screenWidth, View.MeasureSpec.AT_MOST)
+            val heightMeasureSpec = View.MeasureSpec.makeMeasureSpec(screenHeight, View.MeasureSpec.AT_MOST)
+            textView.measure(widthMeasureSpec, heightMeasureSpec)
             val width = textView.measuredWidth.toFloat()
             val height = textView.measuredHeight.toFloat()
             usedRects.add(Rect(
@@ -306,7 +324,7 @@ class FullscreenActivity : AppCompatActivity() {
 
         // 如果文字比屏幕还大，强制缩小
         if (availableWidth <= 0 || availableHeight <= 0) {
-            textView.textSize = textView.textSize * 0.7f // 缩小字体
+            textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, textView.textSize * 0.7f)
             textView.measure(widthMeasureSpec, heightMeasureSpec)
             return Pair(safePadding, safePadding) // 放在左上角安全区域
         }
