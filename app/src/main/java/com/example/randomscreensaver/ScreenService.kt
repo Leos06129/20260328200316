@@ -3,8 +3,6 @@ package com.example.randomscreensaver
 import android.app.Service
 import android.content.Context
 import android.content.Intent
-import android.media.AudioAttributes
-import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Build
@@ -23,7 +21,7 @@ class ScreenService : Service() {
     private var cuckooRunnable: Runnable? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var audioManager: AudioManager? = null
-    private var audioFocusRequest: AudioFocusRequest? = null
+    private var audioFocusRequest: Any? = null
 
     companion object {
         private const val TAG = "ScreenService"
@@ -223,34 +221,24 @@ class ScreenService : Service() {
     private fun requestAudioFocus(): Boolean {
         return try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
-                    .setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .build()
-                    )
-                    .setOnAudioFocusChangeListener { focusChange ->
-                        when (focusChange) {
-                            AudioManager.AUDIOFOCUS_LOSS -> {
-                                Log.d(TAG, "音频焦点丢失")
-                                stopPlaying()
-                            }
-                            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
-                                Log.d(TAG, "音频焦点暂时丢失")
-                                pausePlaying()
-                            }
-                            AudioManager.AUDIOFOCUS_GAIN -> {
-                                Log.d(TAG, "音频焦点获取")
-                                resumePlaying()
-                            }
-                        }
-                    }
-                    .build()
+                // 使用反射创建 AudioFocusRequest，避免直接导入
+                val audioAttributesClass = Class.forName("android.media.AudioAttributes")
+                val builderClass = Class.forName("android.media.AudioAttributes\$Builder")
+                val builder = builderClass.getConstructor().newInstance()
+                builderClass.getMethod("setUsage", Int::class.java).invoke(builder, 5) // USAGE_NOTIFICATION
+                builderClass.getMethod("setContentType", Int::class.java).invoke(builder, 4) // CONTENT_TYPE_SONIFICATION
+                val audioAttributes = builderClass.getMethod("build").invoke(builder)
 
+                val focusRequestClass = Class.forName("android.media.AudioFocusRequest")
+                val focusBuilderClass = Class.forName("android.media.AudioFocusRequest\$Builder")
+                val focusBuilder = focusBuilderClass.getConstructor(Int::class.java).newInstance(3) // AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK
+                focusBuilderClass.getMethod("setAudioAttributes", audioAttributesClass).invoke(focusBuilder, audioAttributes)
+
+                val focusRequest = focusBuilderClass.getMethod("build").invoke(focusBuilder)
                 audioFocusRequest = focusRequest
-                val result = audioManager?.requestAudioFocus(focusRequest)
-                result == AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+
+                val result = audioManager?.javaClass?.getMethod("requestAudioFocus", focusRequestClass)?.invoke(audioManager, focusRequest)
+                result == android.media.AudioManager.AUDIOFOCUS_REQUEST_GRANTED
             } else {
                 @Suppress("DEPRECATION")
                 val result = audioManager?.requestAudioFocus(
@@ -278,8 +266,9 @@ class ScreenService : Service() {
     private fun abandonAudioFocus() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                audioFocusRequest?.let {
-                    audioManager?.abandonAudioFocusRequest(it)
+                audioFocusRequest?.let { request ->
+                    val focusRequestClass = Class.forName("android.media.AudioFocusRequest")
+                    audioManager?.javaClass?.getMethod("abandonAudioFocusRequest", focusRequestClass)?.invoke(audioManager, request)
                 }
             } else {
                 @Suppress("DEPRECATION")
@@ -321,14 +310,19 @@ class ScreenService : Service() {
                 // 播放布谷鸟叫声
                 mediaPlayer = MediaPlayer.create(this, R.raw.cuckoo_sound)
                 if (mediaPlayer != null) {
-                    // 设置音频属性
+                    // 设置音频属性 (API 21+)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                        mediaPlayer?.setAudioAttributes(
-                            AudioAttributes.Builder()
-                                .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                                .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                                .build()
-                        )
+                        try {
+                            val audioAttributesClass = Class.forName("android.media.AudioAttributes")
+                            val builderClass = Class.forName("android.media.AudioAttributes\$Builder")
+                            val builder = builderClass.getConstructor().newInstance()
+                            builderClass.getMethod("setUsage", Int::class.java).invoke(builder, 5) // USAGE_NOTIFICATION
+                            builderClass.getMethod("setContentType", Int::class.java).invoke(builder, 4) // CONTENT_TYPE_SONIFICATION
+                            val audioAttributes = builderClass.getMethod("build").invoke(builder)
+                            MediaPlayer::class.java.getMethod("setAudioAttributes", audioAttributesClass).invoke(mediaPlayer, audioAttributes)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "设置音频属性失败: ${e.message}")
+                        }
                     }
 
                     // 设置音量（最大音量）
@@ -406,13 +400,19 @@ class ScreenService : Service() {
             mediaPlayer?.release()
             mediaPlayer = MediaPlayer.create(this, R.raw.cuckoo_sound)
             if (mediaPlayer != null) {
+                // 设置音频属性 (API 21+)
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    mediaPlayer?.setAudioAttributes(
-                        AudioAttributes.Builder()
-                            .setUsage(AudioAttributes.USAGE_NOTIFICATION)
-                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                            .build()
-                    )
+                    try {
+                        val audioAttributesClass = Class.forName("android.media.AudioAttributes")
+                        val builderClass = Class.forName("android.media.AudioAttributes\$Builder")
+                        val builder = builderClass.getConstructor().newInstance()
+                        builderClass.getMethod("setUsage", Int::class.java).invoke(builder, 5)
+                        builderClass.getMethod("setContentType", Int::class.java).invoke(builder, 4)
+                        val audioAttributes = builderClass.getMethod("build").invoke(builder)
+                        MediaPlayer::class.java.getMethod("setAudioAttributes", audioAttributesClass).invoke(mediaPlayer, audioAttributes)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "设置音频属性失败: ${e.message}")
+                    }
                 }
                 mediaPlayer?.setVolume(1.0f, 1.0f)
                 mediaPlayer?.setOnCompletionListener {
