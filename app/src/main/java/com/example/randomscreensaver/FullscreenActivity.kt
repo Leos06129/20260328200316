@@ -52,7 +52,11 @@ class FullscreenActivity : AppCompatActivity() {
         SLIDE_BOTTOM,  // 从下滑入
         SCALE_BOUNCE,  // 弹性缩放
         FLIP,          // 翻转
-        FADE_SCALE     // 淡入缩放
+        FADE_SCALE,    // 淡入缩放
+        SHAKE,         // 震颤效果
+        WOBBLE,        // 晃动效果
+        FLASH,         // 闪光效果
+        PULSE          // 脉冲效果
     }
 
     companion object {
@@ -265,8 +269,15 @@ class FullscreenActivity : AppCompatActivity() {
             setTextColor(randomColor)
             textSize = randomSize
             gravity = Gravity.CENTER
-            setPadding(8, 4, 8, 4)
+            setPadding(16, 16, 16, 16) // 增加内边距防止截断
             alpha = 0f  // 初始不可见
+            
+            // 设置布局参数，确保不会被父容器裁剪
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            )
+            clipToOutline = false
         }
     }
 
@@ -280,23 +291,32 @@ class FullscreenActivity : AppCompatActivity() {
     }
 
     private fun findNonOverlappingPosition(textView: TextView): Pair<Float, Float>? {
-        // 先测量文字尺寸
-        textView.measure(0, 0)
+        // 强制进行测量
+        val widthMeasureSpec = View.MeasureSpec.makeMeasureSpec(screenWidth, View.MeasureSpec.AT_MOST)
+        val heightMeasureSpec = View.MeasureSpec.makeMeasureSpec(screenHeight, View.MeasureSpec.AT_MOST)
+        textView.measure(widthMeasureSpec, heightMeasureSpec)
+        
         val textWidth = textView.measuredWidth.toFloat()
         val textHeight = textView.measuredHeight.toFloat()
 
-        // 可用区域
-        val availableWidth = screenWidth - padding * 2 - textWidth
-        val availableHeight = screenHeight - padding * 2 - textHeight
+        // 确保文字不会超出屏幕边界（增加安全边距）
+        val safePadding = padding * 1.5f
+        val availableWidth = screenWidth - safePadding * 2 - textWidth
+        val availableHeight = screenHeight - safePadding * 2 - textHeight
 
-        if (availableWidth <= 0 || availableHeight <= 0) return null
+        // 如果文字比屏幕还大，强制缩小
+        if (availableWidth <= 0 || availableHeight <= 0) {
+            textView.textSize = textView.textSize * 0.7f // 缩小字体
+            textView.measure(widthMeasureSpec, heightMeasureSpec)
+            return Pair(safePadding, safePadding) // 放在左上角安全区域
+        }
 
         // 尝试最多50次找到不重叠的位置
         repeat(50) {
-            val x = padding + Random.nextFloat() * availableWidth
-            val y = padding + Random.nextFloat() * availableHeight
+            val x = safePadding + Random.nextFloat() * availableWidth
+            val y = safePadding + Random.nextFloat() * availableHeight
 
-            val newRect = Rect(x - 10, y - 10, x + textWidth + 10, y + textHeight + 10)
+            val newRect = Rect(x - 20, y - 20, x + textWidth + 20, y + textHeight + 20)
 
             // 检查是否与已占用的区域重叠
             val overlaps = usedRects.any { it.intersects(newRect) }
@@ -306,10 +326,10 @@ class FullscreenActivity : AppCompatActivity() {
             }
         }
 
-        // 如果50次都没找到，随机返回一个位置（可能会重叠）
+        // 如果50次都没找到，随机返回一个安全位置（可能会重叠，但不会超出屏幕）
         return Pair(
-            padding + Random.nextFloat() * availableWidth,
-            padding + Random.nextFloat() * availableHeight
+            safePadding + Random.nextFloat() * availableWidth,
+            safePadding + Random.nextFloat() * availableHeight
         )
     }
 
@@ -324,6 +344,10 @@ class FullscreenActivity : AppCompatActivity() {
             AnimationType.SCALE_BOUNCE -> animateScaleBounce(textView)
             AnimationType.FLIP -> animateFlip(textView)
             AnimationType.FADE_SCALE -> animateFadeScale(textView)
+            AnimationType.SHAKE -> animateShake(textView)
+            AnimationType.WOBBLE -> animateWobble(textView)
+            AnimationType.FLASH -> animateFlash(textView)
+            AnimationType.PULSE -> animatePulse(textView)
         }
     }
 
@@ -444,6 +468,44 @@ class FullscreenActivity : AppCompatActivity() {
             .setDuration(400)
             .setInterpolator(AccelerateDecelerateInterpolator())
             .start()
+    }
+
+    private fun animateShake(textView: TextView) {
+        textView.alpha = 1f
+        val animator = ObjectAnimator.ofFloat(textView, "translationX", 0f, 25f, -25f, 25f, -25f, 15f, -15f, 6f, -6f, 0f)
+        animator.duration = 500
+        animator.start()
+    }
+
+    private fun animateWobble(textView: TextView) {
+        textView.alpha = 1f
+        val animator = ObjectAnimator.ofPropertyValuesHolder(
+            textView,
+            PropertyValuesHolder.ofFloat("scaleX", 1f, 1.2f, 0.9f, 1.1f, 0.95f, 1.05f, 1f),
+            PropertyValuesHolder.ofFloat("scaleY", 1f, 0.8f, 1.1f, 0.9f, 1.05f, 0.95f, 1f),
+            PropertyValuesHolder.ofFloat("rotation", 0f, -10f, 10f, -5f, 5f, 0f)
+        )
+        animator.duration = 600
+        animator.start()
+    }
+
+    private fun animateFlash(textView: TextView) {
+        textView.alpha = 0f
+        val animator = ObjectAnimator.ofFloat(textView, "alpha", 0f, 1f, 0f, 1f, 0f, 1f)
+        animator.duration = 600
+        animator.start()
+    }
+
+    private fun animatePulse(textView: TextView) {
+        textView.alpha = 1f
+        val animator = ObjectAnimator.ofPropertyValuesHolder(
+            textView,
+            PropertyValuesHolder.ofFloat("scaleX", 0f, 1.5f, 1f),
+            PropertyValuesHolder.ofFloat("scaleY", 0f, 1.5f, 1f)
+        )
+        animator.duration = 500
+        animator.interpolator = OvershootInterpolator()
+        animator.start()
     }
 
     private fun clearAllWordsAndContinue() {
