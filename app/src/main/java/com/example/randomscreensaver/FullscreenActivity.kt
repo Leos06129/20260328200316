@@ -2,13 +2,14 @@ package com.example.randomscreensaver
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
+import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.animation.PropertyValuesHolder
 import android.animation.ValueAnimator
 import android.app.Activity
-import android.app.KeyguardManager
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Typeface
 import android.util.Log
 import android.util.TypedValue
 import android.os.Build
@@ -16,15 +17,13 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowManager
 import android.view.animation.*
 import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.biometric.BiometricManager
-import androidx.biometric.BiometricPrompt
-import androidx.core.content.ContextCompat
 import kotlin.random.Random
 
 class FullscreenActivity : AppCompatActivity() {
@@ -43,21 +42,41 @@ class FullscreenActivity : AppCompatActivity() {
     private var screenHeight = 0
     private val padding = 60  // 边距像素
 
-    // 动画类型枚举
+    // ── 字体族列表（Android 系统内置字体）──────────────────────────────
+    private val fontFamilies = listOf(
+        "sans-serif",
+        "sans-serif-light",
+        "sans-serif-condensed",
+        "sans-serif-black",
+        "serif",
+        "monospace",
+        "serif-monospace",
+        "casual",
+        "cursive"
+    )
+
+    // ── 动画类型枚举 ────────────────────────────────────────────────────
     private enum class AnimationType {
-        POP,           // 弹出
-        ROTATE_IN,     // 旋转入场
-        SLIDE_LEFT,    // 从左滑入
-        SLIDE_RIGHT,   // 从右滑入
-        SLIDE_TOP,     // 从上滑入
-        SLIDE_BOTTOM,  // 从下滑入
-        SCALE_BOUNCE,  // 弹性缩放
-        FLIP,          // 翻转
-        FADE_SCALE,    // 淡入缩放
-        SHAKE,         // 震颤效果
-        WOBBLE,        // 晃动效果
-        FLASH,         // 闪光效果
-        PULSE          // 脉冲效果
+        POP,            // 弹出
+        ROTATE_IN,      // 旋转入场
+        SLIDE_LEFT,     // 从左滑入
+        SLIDE_RIGHT,    // 从右滑入
+        SLIDE_TOP,      // 从上滑入
+        SLIDE_BOTTOM,   // 从下滑入
+        SCALE_BOUNCE,   // 弹性缩放
+        FLIP,           // 翻转
+        FADE_SCALE,     // 淡入缩放
+        SHAKE,          // 震颤
+        WOBBLE,         // 晃动
+        FLASH,          // 闪光
+        PULSE,          // 脉冲
+        SPRING_DROP,    // 弹簧坠落
+        RUBBER_BAND,    // 橡皮筋
+        DRUNK,          // 醉酒晃动
+        TYPEWRITER,     // 打字机淡入
+        SPIRAL,         // 螺旋放大
+        JELLO,          // 果冻抖动
+        SWING           // 秋千摆动
     }
 
     companion object {
@@ -67,7 +86,6 @@ class FullscreenActivity : AppCompatActivity() {
         const val EXTRA_MAX_INTERVAL = "max_interval"
         const val EXTRA_MIN_INTERVAL = "min_interval"
         const val EXTRA_DISPLAY_DURATION = "display_duration"
-        const val AUTHENTICATION_REQUEST_CODE = 1002
 
         fun start(activity: Activity, message: String, message2: String?, isLocked: Boolean, maxInterval: Int, minInterval: Int, displayDuration: Long) {
             val intent = Intent(activity, FullscreenActivity::class.java).apply {
@@ -91,41 +109,38 @@ class FullscreenActivity : AppCompatActivity() {
         }
     }
 
+    // 双击检测
+    private var lastClickTime = 0L
+    private val doubleClickInterval = 500L
+
+    // 退出标志 —— 一旦置为 true，所有动画回调均跳过
+    @Volatile
+    private var isExiting = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 设置全屏显示
         window.setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN,
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         )
 
-        // 设置锁定屏幕
         lockScreen()
-
-        // 隐藏状态栏和导航栏
         hideSystemUI()
 
-        // 设置黑色背景
         window.decorView.setBackgroundColor(Color.BLACK)
 
-        // 创建容器布局
         container = FrameLayout(this).apply {
             setBackgroundColor(Color.BLACK)
         }
         setContentView(container)
 
-        // 获取屏幕尺寸
         val displayMetrics = resources.displayMetrics
         screenWidth = displayMetrics.widthPixels
         screenHeight = displayMetrics.heightPixels
 
-        // 设置触摸事件监听器
-        container.setOnClickListener {
-            requestAuthentication()
-        }
+        container.setOnTouchListener { _, _ -> false }
 
-        // 获取参数
         currentMessage = intent.getStringExtra(EXTRA_MESSAGE) ?: getString(R.string.default_message)
         currentMessage2 = intent.getStringExtra(EXTRA_MESSAGE2)
         isLockedScreen = intent.getBooleanExtra(EXTRA_IS_LOCKED, false)
@@ -135,7 +150,6 @@ class FullscreenActivity : AppCompatActivity() {
 
         Log.d("FullscreenActivity", "消息1: $currentMessage, 消息2: $currentMessage2")
 
-        // 开始显示动画文字
         startWordAnimation()
     }
 
@@ -146,7 +160,6 @@ class FullscreenActivity : AppCompatActivity() {
                     or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
                     or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
         )
-
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
@@ -154,15 +167,13 @@ class FullscreenActivity : AppCompatActivity() {
     }
 
     private fun startWordAnimation() {
-        // 清空之前的数据
+        if (isExiting) return
         activeTextViews.clear()
         usedRects.clear()
 
-        // 随机选择显示模式
         val hasSecondMessage = !currentMessage2.isNullOrEmpty()
         val displayMode = if (hasSecondMessage) Random.nextInt(0, 3) else 0
 
-        // 根据显示模式确定显示内容
         val displayText = when (displayMode) {
             0 -> currentMessage
             1 -> currentMessage2 ?: currentMessage
@@ -172,14 +183,11 @@ class FullscreenActivity : AppCompatActivity() {
 
         Log.d("FullscreenActivity", "显示模式: $displayMode, 内容: $displayText")
 
-        // 将文字分割成显示单元（中文按两个字一组，英文按词）
         val words = splitTextIntoWords(displayText)
         Log.d("FullscreenActivity", "分割成 ${words.size} 个显示单元: $words")
 
-        // 逐个显示词语
         showWordsSequentially(words, 0)
 
-        // 设置显示持续时间后清除所有文字
         handler.postDelayed({
             clearAllWordsAndContinue()
         }, displayDuration)
@@ -235,22 +243,20 @@ class FullscreenActivity : AppCompatActivity() {
     }
 
     private fun showWordsSequentially(words: List<String>, index: Int) {
+        if (isExiting) return
         if (index >= words.size) return
 
         val word = words[index]
         val textView = createAnimatedTextView(word)
 
-        // 找到不重叠的位置
         val position = findNonOverlappingPosition(textView)
         if (position != null) {
             textView.x = position.first
             textView.y = position.second
 
-            // 添加到容器和记录
             container.addView(textView)
             activeTextViews.add(textView)
 
-            // 记录占用区域（加上一些间距）
             val widthMeasureSpec = View.MeasureSpec.makeMeasureSpec(screenWidth, View.MeasureSpec.AT_MOST)
             val heightMeasureSpec = View.MeasureSpec.makeMeasureSpec(screenHeight, View.MeasureSpec.AT_MOST)
             textView.measure(widthMeasureSpec, heightMeasureSpec)
@@ -263,34 +269,72 @@ class FullscreenActivity : AppCompatActivity() {
                 position.second + height + 20
             ))
 
-            // 执行入场动画
             val animType = AnimationType.values().random()
             playEntranceAnimation(textView, animType)
         }
 
-        // 随机间隔后显示下一个词（100-400ms）
-        val nextDelay = Random.nextLong(100, 401)
+        // 词间延迟更随机，有时快有时慢，更调皮
+        val nextDelay = when (Random.nextInt(5)) {
+            0 -> Random.nextLong(20, 80)    // 极快连发
+            1 -> Random.nextLong(80, 200)   // 快速
+            2 -> Random.nextLong(200, 400)  // 正常
+            3 -> Random.nextLong(400, 700)  // 慢悠悠
+            else -> Random.nextLong(50, 600) // 完全随机
+        }
         handler.postDelayed({
-            showWordsSequentially(words, index + 1)
+            if (!isExiting) showWordsSequentially(words, index + 1)
         }, nextDelay)
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    //  核心：创建随机样式的 TextView
+    // ══════════════════════════════════════════════════════════════════
     private fun createAnimatedTextView(text: String): TextView {
-        // 生成随机颜色（确保在深色背景上可见）
         val randomColor = generateVisibleColor()
 
-        // 生成随机大小 (20-60sp)
-        val randomSize = Random.nextInt(20, 61).toFloat()
+        // 字号：20~72sp，按权重偏向大字
+        val sizeCandidates = listOf(20, 24, 28, 32, 36, 42, 48, 56, 64, 72)
+        val randomSize = sizeCandidates.random().toFloat()
+
+        // 字体族随机
+        val fontFamily = fontFamilies.random()
+
+        // 粗体 / 斜体 / 粗斜体 随机
+        val styleIndex = Random.nextInt(4)
+        val randomTypeface = when (styleIndex) {
+            0 -> Typeface.create(fontFamily, Typeface.NORMAL)
+            1 -> Typeface.create(fontFamily, Typeface.BOLD)
+            2 -> Typeface.create(fontFamily, Typeface.ITALIC)
+            else -> Typeface.create(fontFamily, Typeface.BOLD_ITALIC)
+        }
+
+        // 初始旋转倾斜：-35° ~ 35°，概率分布偏向小角度
+        val tiltAngle = when (Random.nextInt(4)) {
+            0 -> 0f                                    // 正直（较常见）
+            1 -> Random.nextFloat() * 15f - 7.5f      // 轻微倾斜
+            2 -> Random.nextFloat() * 35f - 17.5f     // 中等倾斜
+            else -> if (Random.nextBoolean()) 90f else -90f // 竖排（少见）
+        }
+
+        // 阴影：随机方向、颜色、半径
+        val shadowColor = generateVisibleColor()
+        val shadowRadius = Random.nextFloat() * 12f + 3f
+        val shadowDx = Random.nextFloat() * 6f - 3f
+        val shadowDy = Random.nextFloat() * 6f - 3f
 
         return TextView(this).apply {
             this.text = text
             setTextColor(randomColor)
             textSize = randomSize
+            typeface = randomTypeface
+            rotation = tiltAngle
             gravity = Gravity.CENTER
-            setPadding(16, 16, 16, 16) // 增加内边距防止截断
-            alpha = 0f  // 初始不可见
-            
-            // 设置布局参数，确保不会被父容器裁剪
+            setPadding(20, 12, 20, 12)
+            alpha = 0f  // 初始不可见，由动画控制显现
+
+            // 文字阴影（发光感）
+            setShadowLayer(shadowRadius, shadowDx, shadowDy, shadowColor)
+
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
@@ -300,88 +344,84 @@ class FullscreenActivity : AppCompatActivity() {
     }
 
     private fun generateVisibleColor(): Int {
-        // 生成在黑色背景上可见的明亮颜色
         val hue = Random.nextFloat() * 360
-        val saturation = 0.7f + Random.nextFloat() * 0.3f  // 70-100% 饱和度
-        val value = 0.8f + Random.nextFloat() * 0.2f       // 80-100% 明度
-
+        val saturation = 0.7f + Random.nextFloat() * 0.3f
+        val value = 0.8f + Random.nextFloat() * 0.2f
         return Color.HSVToColor(floatArrayOf(hue, saturation, value))
     }
 
     private fun findNonOverlappingPosition(textView: TextView): Pair<Float, Float>? {
-        // 强制进行测量
         val widthMeasureSpec = View.MeasureSpec.makeMeasureSpec(screenWidth, View.MeasureSpec.AT_MOST)
         val heightMeasureSpec = View.MeasureSpec.makeMeasureSpec(screenHeight, View.MeasureSpec.AT_MOST)
         textView.measure(widthMeasureSpec, heightMeasureSpec)
-        
+
         val textWidth = textView.measuredWidth.toFloat()
         val textHeight = textView.measuredHeight.toFloat()
 
-        // 确保文字不会超出屏幕边界（增加安全边距）
         val safePadding = padding * 1.5f
         val availableWidth = screenWidth - safePadding * 2 - textWidth
         val availableHeight = screenHeight - safePadding * 2 - textHeight
 
-        // 如果文字比屏幕还大，强制缩小
         if (availableWidth <= 0 || availableHeight <= 0) {
             textView.setTextSize(TypedValue.COMPLEX_UNIT_PX, textView.textSize * 0.7f)
             textView.measure(widthMeasureSpec, heightMeasureSpec)
-            return Pair(safePadding, safePadding) // 放在左上角安全区域
+            return Pair(safePadding, safePadding)
         }
 
-        // 尝试最多50次找到不重叠的位置
         repeat(50) {
             val x = safePadding + Random.nextFloat() * availableWidth
             val y = safePadding + Random.nextFloat() * availableHeight
-
             val newRect = Rect(x - 20, y - 20, x + textWidth + 20, y + textHeight + 20)
-
-            // 检查是否与已占用的区域重叠
-            val overlaps = usedRects.any { it.intersects(newRect) }
-
-            if (!overlaps) {
+            if (usedRects.none { it.intersects(newRect) }) {
                 return Pair(x, y)
             }
         }
-
-        // 如果50次都没找到，随机返回一个安全位置（可能会重叠，但不会超出屏幕）
-        return Pair(
-            safePadding + Random.nextFloat() * availableWidth,
-            safePadding + Random.nextFloat() * availableHeight
-        )
+        return null
     }
 
+    // ══════════════════════════════════════════════════════════════════
+    //  入场动画分发
+    // ══════════════════════════════════════════════════════════════════
     private fun playEntranceAnimation(textView: TextView, animType: AnimationType) {
         when (animType) {
-            AnimationType.POP -> animatePop(textView)
-            AnimationType.ROTATE_IN -> animateRotateIn(textView)
-            AnimationType.SLIDE_LEFT -> animateSlideFromLeft(textView)
-            AnimationType.SLIDE_RIGHT -> animateSlideFromRight(textView)
-            AnimationType.SLIDE_TOP -> animateSlideFromTop(textView)
+            AnimationType.POP          -> animatePop(textView)
+            AnimationType.ROTATE_IN    -> animateRotateIn(textView)
+            AnimationType.SLIDE_LEFT   -> animateSlideFromLeft(textView)
+            AnimationType.SLIDE_RIGHT  -> animateSlideFromRight(textView)
+            AnimationType.SLIDE_TOP    -> animateSlideFromTop(textView)
             AnimationType.SLIDE_BOTTOM -> animateSlideFromBottom(textView)
             AnimationType.SCALE_BOUNCE -> animateScaleBounce(textView)
-            AnimationType.FLIP -> animateFlip(textView)
-            AnimationType.FADE_SCALE -> animateFadeScale(textView)
-            AnimationType.SHAKE -> animateShake(textView)
-            AnimationType.WOBBLE -> animateWobble(textView)
-            AnimationType.FLASH -> animateFlash(textView)
-            AnimationType.PULSE -> animatePulse(textView)
+            AnimationType.FLIP         -> animateFlip(textView)
+            AnimationType.FADE_SCALE   -> animateFadeScale(textView)
+            AnimationType.SHAKE        -> animateShake(textView)
+            AnimationType.WOBBLE       -> animateWobble(textView)
+            AnimationType.FLASH        -> animateFlash(textView)
+            AnimationType.PULSE        -> animatePulse(textView)
+            AnimationType.SPRING_DROP  -> animateSpringDrop(textView)
+            AnimationType.RUBBER_BAND  -> animateRubberBand(textView)
+            AnimationType.DRUNK        -> animateDrunk(textView)
+            AnimationType.TYPEWRITER   -> animateTypewriter(textView)
+            AnimationType.SPIRAL       -> animateSpiral(textView)
+            AnimationType.JELLO        -> animateJello(textView)
+            AnimationType.SWING        -> animateSwing(textView)
         }
     }
+
+    // ── 原有动画 ────────────────────────────────────────────────────────
 
     private fun animatePop(textView: TextView) {
         textView.scaleX = 0f
         textView.scaleY = 0f
         textView.alpha = 1f
-
-        val animator = ObjectAnimator.ofPropertyValuesHolder(
+        ObjectAnimator.ofPropertyValuesHolder(
             textView,
-            PropertyValuesHolder.ofFloat("scaleX", 0f, 1.2f, 1f),
-            PropertyValuesHolder.ofFloat("scaleY", 0f, 1.2f, 1f)
-        )
-        animator.duration = 400
-        animator.interpolator = OvershootInterpolator(1.5f)
-        animator.start()
+            PropertyValuesHolder.ofFloat("scaleX", 0f, 1.3f, 0.9f, 1f),
+            PropertyValuesHolder.ofFloat("scaleY", 0f, 1.3f, 0.9f, 1f)
+        ).apply {
+            duration = 450
+            interpolator = OvershootInterpolator(2f)
+            start()
+        }
     }
 
     private fun animateRotateIn(textView: TextView) {
@@ -389,146 +429,244 @@ class FullscreenActivity : AppCompatActivity() {
         textView.scaleX = 0f
         textView.scaleY = 0f
         textView.alpha = 1f
-
-        val animator = ObjectAnimator.ofPropertyValuesHolder(
+        ObjectAnimator.ofPropertyValuesHolder(
             textView,
             PropertyValuesHolder.ofFloat("rotation", -180f, 0f),
             PropertyValuesHolder.ofFloat("scaleX", 0f, 1f),
             PropertyValuesHolder.ofFloat("scaleY", 0f, 1f)
-        )
-        animator.duration = 500
-        animator.interpolator = AnticipateOvershootInterpolator()
-        animator.start()
+        ).apply {
+            duration = 500
+            interpolator = AnticipateOvershootInterpolator()
+            start()
+        }
     }
 
     private fun animateSlideFromLeft(textView: TextView) {
         val originalX = textView.x
-        textView.x = -200f
+        textView.x = -300f
         textView.alpha = 1f
-
-        textView.animate()
-            .x(originalX)
-            .setDuration(400)
-            .setInterpolator(DecelerateInterpolator())
-            .start()
+        textView.animate().x(originalX).setDuration(420)
+            .setInterpolator(OvershootInterpolator(1.5f)).start()
     }
 
     private fun animateSlideFromRight(textView: TextView) {
         val originalX = textView.x
-        textView.x = screenWidth + 200f
+        textView.x = screenWidth + 300f
         textView.alpha = 1f
-
-        textView.animate()
-            .x(originalX)
-            .setDuration(400)
-            .setInterpolator(DecelerateInterpolator())
-            .start()
+        textView.animate().x(originalX).setDuration(420)
+            .setInterpolator(OvershootInterpolator(1.5f)).start()
     }
 
     private fun animateSlideFromTop(textView: TextView) {
         val originalY = textView.y
-        textView.y = -200f
+        textView.y = -300f
         textView.alpha = 1f
-
-        textView.animate()
-            .y(originalY)
-            .setDuration(400)
-            .setInterpolator(DecelerateInterpolator())
-            .start()
+        textView.animate().y(originalY).setDuration(420)
+            .setInterpolator(BounceInterpolator()).start()
     }
 
     private fun animateSlideFromBottom(textView: TextView) {
         val originalY = textView.y
-        textView.y = screenHeight + 200f
+        textView.y = screenHeight + 300f
         textView.alpha = 1f
-
-        textView.animate()
-            .y(originalY)
-            .setDuration(400)
-            .setInterpolator(DecelerateInterpolator())
-            .start()
+        textView.animate().y(originalY).setDuration(420)
+            .setInterpolator(OvershootInterpolator(1.5f)).start()
     }
 
     private fun animateScaleBounce(textView: TextView) {
         textView.scaleX = 0f
         textView.scaleY = 0f
         textView.alpha = 1f
-
-        val animator = ObjectAnimator.ofPropertyValuesHolder(
+        ObjectAnimator.ofPropertyValuesHolder(
             textView,
-            PropertyValuesHolder.ofFloat("scaleX", 0f, 1.1f, 0.9f, 1f),
-            PropertyValuesHolder.ofFloat("scaleY", 0f, 1.1f, 0.9f, 1f)
-        )
-        animator.duration = 600
-        animator.interpolator = BounceInterpolator()
-        animator.start()
+            PropertyValuesHolder.ofFloat("scaleX", 0f, 1.15f, 0.88f, 1.05f, 0.97f, 1f),
+            PropertyValuesHolder.ofFloat("scaleY", 0f, 1.15f, 0.88f, 1.05f, 0.97f, 1f)
+        ).apply {
+            duration = 700
+            interpolator = DecelerateInterpolator()
+            start()
+        }
     }
 
     private fun animateFlip(textView: TextView) {
         textView.rotationY = 90f
         textView.alpha = 1f
-
-        val animator = ObjectAnimator.ofFloat(textView, "rotationY", 90f, 0f)
-        animator.duration = 400
-        animator.interpolator = DecelerateInterpolator()
-        animator.start()
+        ObjectAnimator.ofFloat(textView, "rotationY", 90f, -15f, 5f, 0f).apply {
+            duration = 450
+            interpolator = DecelerateInterpolator()
+            start()
+        }
     }
 
     private fun animateFadeScale(textView: TextView) {
-        textView.scaleX = 0.5f
-        textView.scaleY = 0.5f
+        textView.scaleX = 0.3f
+        textView.scaleY = 0.3f
         textView.alpha = 0f
-
-        textView.animate()
-            .alpha(1f)
-            .scaleX(1f)
-            .scaleY(1f)
-            .setDuration(400)
-            .setInterpolator(AccelerateDecelerateInterpolator())
-            .start()
+        textView.animate().alpha(1f).scaleX(1f).scaleY(1f)
+            .setDuration(400).setInterpolator(OvershootInterpolator(1.2f)).start()
     }
 
     private fun animateShake(textView: TextView) {
         textView.alpha = 1f
-        val animator = ObjectAnimator.ofFloat(textView, "translationX", 0f, 25f, -25f, 25f, -25f, 15f, -15f, 6f, -6f, 0f)
-        animator.duration = 500
-        animator.start()
+        ObjectAnimator.ofFloat(textView, "translationX",
+            0f, 30f, -30f, 25f, -25f, 18f, -18f, 10f, -10f, 5f, 0f).apply {
+            duration = 600
+            start()
+        }
     }
 
     private fun animateWobble(textView: TextView) {
         textView.alpha = 1f
-        val animator = ObjectAnimator.ofPropertyValuesHolder(
+        ObjectAnimator.ofPropertyValuesHolder(
             textView,
-            PropertyValuesHolder.ofFloat("scaleX", 1f, 1.2f, 0.9f, 1.1f, 0.95f, 1.05f, 1f),
-            PropertyValuesHolder.ofFloat("scaleY", 1f, 0.8f, 1.1f, 0.9f, 1.05f, 0.95f, 1f),
-            PropertyValuesHolder.ofFloat("rotation", 0f, -10f, 10f, -5f, 5f, 0f)
-        )
-        animator.duration = 600
-        animator.start()
+            PropertyValuesHolder.ofFloat("scaleX", 1f, 1.25f, 0.85f, 1.15f, 0.93f, 1f),
+            PropertyValuesHolder.ofFloat("scaleY", 1f, 0.75f, 1.15f, 0.88f, 1.07f, 1f),
+            PropertyValuesHolder.ofFloat("rotation", 0f, -12f, 12f, -7f, 7f, -3f, 0f)
+        ).apply {
+            duration = 700
+            start()
+        }
     }
 
     private fun animateFlash(textView: TextView) {
         textView.alpha = 0f
-        val animator = ObjectAnimator.ofFloat(textView, "alpha", 0f, 1f, 0f, 1f, 0f, 1f)
-        animator.duration = 600
-        animator.start()
+        ObjectAnimator.ofFloat(textView, "alpha",
+            0f, 1f, 0.2f, 1f, 0.5f, 1f).apply {
+            duration = 600
+            start()
+        }
     }
 
     private fun animatePulse(textView: TextView) {
         textView.alpha = 1f
-        val animator = ObjectAnimator.ofPropertyValuesHolder(
+        ObjectAnimator.ofPropertyValuesHolder(
             textView,
-            PropertyValuesHolder.ofFloat("scaleX", 0f, 1.5f, 1f),
-            PropertyValuesHolder.ofFloat("scaleY", 0f, 1.5f, 1f)
-        )
-        animator.duration = 500
-        animator.interpolator = OvershootInterpolator()
-        animator.start()
+            PropertyValuesHolder.ofFloat("scaleX", 0f, 1.6f, 0.9f, 1.1f, 1f),
+            PropertyValuesHolder.ofFloat("scaleY", 0f, 1.6f, 0.9f, 1.1f, 1f)
+        ).apply {
+            duration = 550
+            interpolator = OvershootInterpolator(1.5f)
+            start()
+        }
     }
 
+    // ── 新增动画 ────────────────────────────────────────────────────────
+
+    /** 弹簧坠落：从上方高处以弹弹的节奏落下 */
+    private fun animateSpringDrop(textView: TextView) {
+        val originalY = textView.y
+        textView.y = -screenHeight * 0.3f
+        textView.alpha = 1f
+        textView.animate().y(originalY)
+            .setDuration(700)
+            .setInterpolator(BounceInterpolator())
+            .start()
+    }
+
+    /** 橡皮筋：水平方向先超出再回弹 */
+    private fun animateRubberBand(textView: TextView) {
+        textView.alpha = 1f
+        ObjectAnimator.ofPropertyValuesHolder(
+            textView,
+            PropertyValuesHolder.ofFloat("scaleX", 1f, 1.5f, 0.75f, 1.25f, 0.88f, 1f),
+            PropertyValuesHolder.ofFloat("scaleY", 1f, 0.5f, 1.25f, 0.85f, 1.1f, 1f)
+        ).apply {
+            duration = 800
+            interpolator = DecelerateInterpolator()
+            start()
+        }
+    }
+
+    /** 醉酒：旋转+位移的随机晃动组合 */
+    private fun animateDrunk(textView: TextView) {
+        textView.alpha = 1f
+        val dx = Random.nextFloat() * 40f - 20f
+        val dy = Random.nextFloat() * 40f - 20f
+        ObjectAnimator.ofPropertyValuesHolder(
+            textView,
+            PropertyValuesHolder.ofFloat("rotation",
+                0f, 20f, -25f, 18f, -12f, 8f, -4f, 0f),
+            PropertyValuesHolder.ofFloat("translationX",
+                0f, dx, -dx * 0.8f, dx * 0.5f, 0f),
+            PropertyValuesHolder.ofFloat("translationY",
+                0f, dy, -dy * 0.6f, dy * 0.3f, 0f)
+        ).apply {
+            duration = 900
+            interpolator = DecelerateInterpolator()
+            start()
+        }
+    }
+
+    /** 打字机：先完全透明，然后逐渐淡入同时从小到正常 */
+    private fun animateTypewriter(textView: TextView) {
+        textView.alpha = 0f
+        textView.scaleX = 0.6f
+        textView.scaleY = 0.6f
+        val delay = Random.nextLong(0, 150)
+        handler.postDelayed({
+            if (!isExiting) {
+                textView.animate()
+                    .alpha(1f).scaleX(1f).scaleY(1f)
+                    .setDuration(350)
+                    .setInterpolator(AccelerateDecelerateInterpolator())
+                    .start()
+            }
+        }, delay)
+    }
+
+    /** 螺旋：先旋转360°同时从0放大到正常 */
+    private fun animateSpiral(textView: TextView) {
+        textView.rotation = 360f
+        textView.scaleX = 0f
+        textView.scaleY = 0f
+        textView.alpha = 1f
+        ObjectAnimator.ofPropertyValuesHolder(
+            textView,
+            PropertyValuesHolder.ofFloat("rotation", 360f, 0f),
+            PropertyValuesHolder.ofFloat("scaleX", 0f, 1.1f, 1f),
+            PropertyValuesHolder.ofFloat("scaleY", 0f, 1.1f, 1f)
+        ).apply {
+            duration = 600
+            interpolator = DecelerateInterpolator(1.5f)
+            start()
+        }
+    }
+
+    /** 果冻：上下轴向交替压缩，像果冻一样颤抖 */
+    private fun animateJello(textView: TextView) {
+        textView.alpha = 1f
+        ObjectAnimator.ofPropertyValuesHolder(
+            textView,
+            PropertyValuesHolder.ofFloat("scaleX",
+                1f, 1.3f, 0.7f, 1.2f, 0.8f, 1.1f, 0.9f, 1.05f, 0.95f, 1f),
+            PropertyValuesHolder.ofFloat("scaleY",
+                1f, 0.7f, 1.3f, 0.8f, 1.2f, 0.9f, 1.1f, 0.95f, 1.05f, 1f)
+        ).apply {
+            duration = 900
+            interpolator = LinearInterpolator()
+            start()
+        }
+    }
+
+    /** 秋千摆动：绕顶部中心点类似秋千的摇摆入场 */
+    private fun animateSwing(textView: TextView) {
+        textView.pivotX = textView.measuredWidth / 2f
+        textView.pivotY = 0f
+        textView.rotation = -60f
+        textView.alpha = 1f
+        ObjectAnimator.ofFloat(textView, "rotation",
+            -60f, 30f, -20f, 12f, -6f, 3f, 0f).apply {
+            duration = 700
+            interpolator = DecelerateInterpolator()
+            start()
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  出场动画（每个词独立随机出场方式）
+    // ══════════════════════════════════════════════════════════════════
     private fun clearAllWordsAndContinue() {
-        // 随机选择出场动画
-        val exitAnimType = Random.nextInt(4)
+        if (isExiting) return
 
         if (activeTextViews.isEmpty()) {
             waitAndShowNextMessage()
@@ -539,8 +677,14 @@ class FullscreenActivity : AppCompatActivity() {
         val totalCount = activeTextViews.size
 
         activeTextViews.forEachIndexed { index, textView ->
+            // 每个词独立随机出场类型
+            val exitType = Random.nextInt(8)
+            // 错开时间出场，更生动
+            val exitDelay = index * Random.nextLong(30L, 100L)
             handler.postDelayed({
-                playExitAnimation(textView, exitAnimType) {
+                if (isExiting) return@postDelayed
+                playExitAnimation(textView, exitType) {
+                    if (isExiting) return@playExitAnimation
                     completedCount++
                     if (completedCount >= totalCount) {
                         container.removeAllViews()
@@ -549,68 +693,75 @@ class FullscreenActivity : AppCompatActivity() {
                         waitAndShowNextMessage()
                     }
                 }
-            }, index * 50L)  // 依次出场，间隔50ms
+            }, exitDelay)
         }
     }
 
     private fun playExitAnimation(textView: TextView, type: Int, onComplete: () -> Unit) {
         when (type) {
             0 -> { // 淡出缩小
-                textView.animate()
-                    .alpha(0f)
-                    .scaleX(0f)
-                    .scaleY(0f)
-                    .setDuration(300)
-                    .withEndAction { onComplete() }
-                    .start()
+                textView.animate().alpha(0f).scaleX(0f).scaleY(0f)
+                    .setDuration(350).withEndAction { onComplete() }.start()
             }
             1 -> { // 向上飞出
-                textView.animate()
-                    .y(-200f)
-                    .alpha(0f)
-                    .setDuration(300)
-                    .withEndAction { onComplete() }
-                    .start()
+                textView.animate().y(-300f).alpha(0f)
+                    .setDuration(350).withEndAction { onComplete() }.start()
             }
             2 -> { // 向右飞出
-                textView.animate()
-                    .x(screenWidth + 200f)
-                    .alpha(0f)
-                    .setDuration(300)
-                    .withEndAction { onComplete() }
-                    .start()
+                textView.animate().x(screenWidth + 300f).alpha(0f)
+                    .setDuration(350).withEndAction { onComplete() }.start()
             }
             3 -> { // 旋转消失
-                val animator = ObjectAnimator.ofPropertyValuesHolder(
+                ObjectAnimator.ofPropertyValuesHolder(
                     textView,
-                    PropertyValuesHolder.ofFloat("rotation", 0f, 180f),
+                    PropertyValuesHolder.ofFloat("rotation", 0f, 360f),
                     PropertyValuesHolder.ofFloat("scaleX", 1f, 0f),
                     PropertyValuesHolder.ofFloat("scaleY", 1f, 0f),
                     PropertyValuesHolder.ofFloat("alpha", 1f, 0f)
-                )
-                animator.duration = 300
-                animator.addListener(object : AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: Animator) {
-                        onComplete()
-                    }
-                })
-                animator.start()
+                ).apply {
+                    duration = 350
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) { onComplete() }
+                    })
+                    start()
+                }
+            }
+            4 -> { // 向左飞出
+                textView.animate().x(-300f).alpha(0f)
+                    .setDuration(350).withEndAction { onComplete() }.start()
+            }
+            5 -> { // 向下掉落
+                textView.animate().y(screenHeight + 200f).alpha(0f)
+                    .setInterpolator(AccelerateInterpolator(2f))
+                    .setDuration(400).withEndAction { onComplete() }.start()
+            }
+            6 -> { // 爆炸放大消失
+                textView.animate().scaleX(3f).scaleY(3f).alpha(0f)
+                    .setDuration(350).withEndAction { onComplete() }.start()
+            }
+            7 -> { // 翻转消失
+                ObjectAnimator.ofFloat(textView, "rotationY", 0f, 90f).apply {
+                    duration = 200
+                    addListener(object : AnimatorListenerAdapter() {
+                        override fun onAnimationEnd(animation: Animator) {
+                            textView.alpha = 0f
+                            onComplete()
+                        }
+                    })
+                    start()
+                }
             }
         }
     }
 
     private fun waitAndShowNextMessage() {
-        // 生成随机间隔
+        if (isExiting) return
         val nextInterval = Random.nextLong(
             minInterval.toLong() * 1000,
             maxInterval.toLong() * 1000
         )
-
         Log.d("FullscreenActivity", "等待下一条消息: ${nextInterval}ms")
-
-        handler.postDelayed({
-            startWordAnimation()
-        }, nextInterval)
+        handler.postDelayed({ startWordAnimation() }, nextInterval)
     }
 
     private fun hideSystemUI() {
@@ -626,9 +777,7 @@ class FullscreenActivity : AppCompatActivity() {
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) {
-            hideSystemUI()
-        }
+        if (hasFocus) hideSystemUI()
     }
 
     override fun onDestroy() {
@@ -636,153 +785,20 @@ class FullscreenActivity : AppCompatActivity() {
         handler.removeCallbacksAndMessages(null)
     }
 
-    // ========== 解锁相关代码 ==========
-
-    private var currentBiometricPrompt: BiometricPrompt? = null
-    private var currentDeviceCredentialIntent: Intent? = null
-    private var isUnlocking = false
-    private var timeoutRunnable: Runnable? = null
-
-    private fun requestAuthentication() {
-        if (isUnlocking) {
-            Log.d("FullscreenActivity", "正在解锁中，跳过")
-            return
-        }
-
-        handler.removeCallbacksAndMessages(null)
-
-        val biometricManager = BiometricManager.from(this)
-        when (biometricManager.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)) {
-            BiometricManager.BIOMETRIC_SUCCESS -> {
-                val promptInfo = BiometricPrompt.PromptInfo.Builder()
-                    .setTitle("解锁屏保")
-                    .setSubtitle("需要输入密码或使用指纹解锁")
-                    .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
-                    .build()
-
-                val executor = ContextCompat.getMainExecutor(this)
-                val biometricPrompt = BiometricPrompt(this, executor,
-                    object : BiometricPrompt.AuthenticationCallback() {
-                        override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-                            super.onAuthenticationSucceeded(result)
-                            Log.d("FullscreenActivity", "生物识别认证成功")
-                            unlockScreenAndFinish()
-                        }
-
-                        override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
-                            super.onAuthenticationError(errorCode, errString)
-                            Log.d("FullscreenActivity", "生物识别认证错误: $errorCode, $errString")
-                            timeoutRunnable?.let { handler.removeCallbacks(it) }
-
-                            if (errorCode == BiometricPrompt.ERROR_USER_CANCELED ||
-                                errorCode == BiometricPrompt.ERROR_NEGATIVE_BUTTON ||
-                                errorCode == BiometricPrompt.ERROR_CANCELED) {
-                                finish()
-                            } else {
-                                isUnlocking = false
-                                handler.postDelayed({
-                                    restartDisplayCycle()
-                                }, 5000)
-                            }
-                        }
-
-                        override fun onAuthenticationFailed() {
-                            super.onAuthenticationFailed()
-                            Log.d("FullscreenActivity", "生物识别认证失败")
-                        }
-                    })
-
-                currentBiometricPrompt = biometricPrompt
-                biometricPrompt.authenticate(promptInfo)
-
-                timeoutRunnable = Runnable {
-                    try {
-                        biometricPrompt.cancelAuthentication()
-                    } catch (e: Exception) {
-                        Log.d("FullscreenActivity", "取消认证失败: ${e.message}")
-                    }
-                    isUnlocking = false
-                    restartDisplayCycle()
-                }
-                handler.postDelayed(timeoutRunnable!!, 5000)
-            }
-            else -> {
-                requestKeyguardWithTimeout()
-            }
-        }
-    }
-
-    private fun requestKeyguardWithTimeout() {
-        val keyguardManager = getSystemService(KEYGUARD_SERVICE) as KeyguardManager
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val intent = keyguardManager.createConfirmDeviceCredentialIntent(
-                "解锁屏保", "需要解锁才能使用设备")
-            if (intent != null) {
-                currentDeviceCredentialIntent = intent
-                startActivityForResult(intent, AUTHENTICATION_REQUEST_CODE)
-
-                timeoutRunnable = Runnable {
-                    isUnlocking = false
-                    finish()
-                }
-                handler.postDelayed(timeoutRunnable!!, 5000)
+    // 双击退出屏保
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        if (event.action == MotionEvent.ACTION_UP) {
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastClickTime < doubleClickInterval) {
+                Log.d("FullscreenActivity", "双击退出屏保")
+                isExiting = true
+                handler.removeCallbacksAndMessages(null)
+                finish()
+                return true
             } else {
-                unlockScreenAndFinish()
-            }
-        } else {
-            unlockScreenAndFinish()
-        }
-    }
-
-    private fun restartDisplayCycle() {
-        startWordAnimation()
-    }
-
-    private fun unlockScreenAndFinish() {
-        if (isUnlocking) {
-            Log.d("FullscreenActivity", "正在解锁，跳过")
-            return
-        }
-        isUnlocking = true
-
-        handler.removeCallbacksAndMessages(null)
-        Log.d("FullscreenActivity", "unlockScreenAndFinish 被调用")
-
-        try {
-            window.clearFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED
-                        or WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
-                        or WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
-                        or WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-            )
-
-            val serviceIntent = Intent(this, ScreenService::class.java).apply {
-                action = ScreenService.ACTION_STOP
-            }
-            stopService(serviceIntent)
-
-            finish()
-            Log.d("FullscreenActivity", "Activity 已关闭")
-        } catch (e: Exception) {
-            Log.e("FullscreenActivity", "关闭Activity失败: ${e.message}")
-            isUnlocking = false
-        }
-    }
-
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        timeoutRunnable?.let { handler.removeCallbacks(it) }
-
-        if (requestCode == AUTHENTICATION_REQUEST_CODE) {
-            if (resultCode == Activity.RESULT_OK) {
-                Log.d("FullscreenActivity", "密码认证成功")
-                unlockScreenAndFinish()
-            } else {
-                Log.d("FullscreenActivity", "密码认证失败, resultCode: $resultCode")
-                isUnlocking = false
-                restartDisplayCycle()
+                lastClickTime = currentTime
             }
         }
+        return super.onTouchEvent(event)
     }
 }
