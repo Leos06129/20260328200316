@@ -42,6 +42,9 @@ class FullscreenActivity : AppCompatActivity() {
     private var screenHeight = 0
     private val padding = 60  // 边距像素
 
+    // 当前屏的颜色序列（同屏内强对比）
+    private val currentScreenColors = mutableListOf<Int>()
+
     // ── 字体族列表（Android 系统内置字体）──────────────────────────────
     private val fontFamilies = listOf(
         "sans-serif",
@@ -170,6 +173,7 @@ class FullscreenActivity : AppCompatActivity() {
         if (isExiting) return
         activeTextViews.clear()
         usedRects.clear()
+        currentScreenColors.clear()
 
         val hasSecondMessage = !currentMessage2.isNullOrEmpty()
         val displayMode = if (hasSecondMessage) Random.nextInt(0, 3) else 0
@@ -186,11 +190,65 @@ class FullscreenActivity : AppCompatActivity() {
         val words = splitTextIntoWords(displayText)
         Log.d("FullscreenActivity", "分割成 ${words.size} 个显示单元: $words")
 
+        // 预生成同屏强对比色序列
+        buildContrastColorSequence(words.size)
+
         showWordsSequentially(words, 0)
 
         handler.postDelayed({
             clearAllWordsAndContinue()
         }, displayDuration)
+    }
+
+    /**
+     * 预生成 count 个颜色，保证同屏内相邻颜色 hue 差距大：
+     * - 每次新颜色与已有所有颜色的 hue 差都 ≥ minHueDiff
+     * - 有 40% 概率直接取上一个颜色的互补色（hue+180°），确保反色感
+     */
+    private fun buildContrastColorSequence(count: Int) {
+        val usedHues = mutableListOf<Float>()
+        val minHueDiff = 60f   // 最小色相差
+        val sat = 0.85f + Random.nextFloat() * 0.15f  // 高饱和度
+        val `val` = 0.85f + Random.nextFloat() * 0.15f // 高亮度
+
+        // 第一个颜色完全随机
+        val firstHue = Random.nextFloat() * 360f
+        usedHues.add(firstHue)
+        currentScreenColors.add(Color.HSVToColor(floatArrayOf(firstHue, sat, `val`)))
+
+        repeat(count - 1) {
+            val lastHue = usedHues.last()
+            val newHue: Float
+
+            if (Random.nextFloat() < 0.4f) {
+                // 40% 直接用互补色
+                newHue = (lastHue + 180f) % 360f
+            } else {
+                // 其余：在全色相空间里找一个与所有已用 hue 差距最大的角度
+                var bestHue = (lastHue + 120f) % 360f
+                var bestMinDiff = 0f
+                // 用16等分采样找最优
+                repeat(16) { i ->
+                    val candidate = (lastHue + 22.5f * (i + 1)) % 360f
+                    val minDiff = usedHues.minOf { used ->
+                        val diff = Math.abs(candidate - used)
+                        minOf(diff, 360f - diff)
+                    }
+                    if (minDiff > bestMinDiff) {
+                        bestMinDiff = minDiff
+                        bestHue = candidate
+                    }
+                }
+                // 在最优角度附近加一点随机扰动（±20°）
+                newHue = ((bestHue + Random.nextFloat() * 40f - 20f) + 360f) % 360f
+            }
+
+            // 每个词独立随机饱和度/亮度，但都保持高饱和高亮度
+            val s = 0.75f + Random.nextFloat() * 0.25f
+            val v = 0.80f + Random.nextFloat() * 0.20f
+            usedHues.add(newHue)
+            currentScreenColors.add(Color.HSVToColor(floatArrayOf(newHue, s, v)))
+        }
     }
 
     private fun splitTextIntoWords(text: String): List<String> {
@@ -247,7 +305,7 @@ class FullscreenActivity : AppCompatActivity() {
         if (index >= words.size) return
 
         val word = words[index]
-        val textView = createAnimatedTextView(word)
+        val textView = createAnimatedTextView(word, index)
 
         val position = findNonOverlappingPosition(textView)
         if (position != null) {
@@ -289,8 +347,15 @@ class FullscreenActivity : AppCompatActivity() {
     // ══════════════════════════════════════════════════════════════════
     //  核心：创建随机样式的 TextView
     // ══════════════════════════════════════════════════════════════════
-    private fun createAnimatedTextView(text: String): TextView {
-        val randomColor = generateVisibleColor()
+    private fun createAnimatedTextView(text: String, colorIndex: Int): TextView {
+        // 从预生成的对比色序列里取颜色，越界则兜底随机
+        val randomColor = if (colorIndex < currentScreenColors.size)
+            currentScreenColors[colorIndex]
+        else
+            generateVisibleColor()
+
+        // 阴影取该词颜色的互补色（hue+180°），形成强烈对比发光效果
+        val shadowColor = complementColor(randomColor)
 
         // 字号：20~72sp，按权重偏向大字
         val sizeCandidates = listOf(20, 24, 28, 32, 36, 42, 48, 56, 64, 72)
@@ -316,9 +381,7 @@ class FullscreenActivity : AppCompatActivity() {
             else -> if (Random.nextBoolean()) 90f else -90f // 竖排（少见）
         }
 
-        // 阴影：随机方向、颜色、半径
-        val shadowColor = generateVisibleColor()
-        val shadowRadius = Random.nextFloat() * 12f + 3f
+        val shadowRadius = Random.nextFloat() * 14f + 4f
         val shadowDx = Random.nextFloat() * 6f - 3f
         val shadowDy = Random.nextFloat() * 6f - 3f
 
@@ -330,9 +393,8 @@ class FullscreenActivity : AppCompatActivity() {
             rotation = tiltAngle
             gravity = Gravity.CENTER
             setPadding(20, 12, 20, 12)
-            alpha = 0f  // 初始不可见，由动画控制显现
+            alpha = 0f
 
-            // 文字阴影（发光感）
             setShadowLayer(shadowRadius, shadowDx, shadowDy, shadowColor)
 
             layoutParams = FrameLayout.LayoutParams(
@@ -341,6 +403,17 @@ class FullscreenActivity : AppCompatActivity() {
             )
             clipToOutline = false
         }
+    }
+
+    /** 返回给定颜色的互补色（HSV hue + 180°） */
+    private fun complementColor(color: Int): Int {
+        val hsv = FloatArray(3)
+        Color.colorToHSV(color, hsv)
+        hsv[0] = (hsv[0] + 180f) % 360f
+        // 互补阴影保持高饱和、稍低亮度，避免太亮盖过文字
+        hsv[1] = (hsv[1] * 0.9f).coerceIn(0.6f, 1f)
+        hsv[2] = (hsv[2] * 0.8f).coerceIn(0.5f, 0.9f)
+        return Color.HSVToColor(hsv)
     }
 
     private fun generateVisibleColor(): Int {
