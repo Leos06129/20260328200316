@@ -25,6 +25,7 @@ import android.widget.FrameLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import kotlin.random.Random
+import java.util.Calendar
 
 class FullscreenActivity : AppCompatActivity() {
 
@@ -44,6 +45,25 @@ class FullscreenActivity : AppCompatActivity() {
 
     // 当前屏的颜色序列（同屏内强对比）
     private val currentScreenColors = mutableListOf<Int>()
+
+    // ── 时钟相关 ──────────────────────────────────────────────────────────
+    private var clockTextView: TextView? = null
+    private var clockStyle: ClockStyle = ClockStyle.DIGITAL_LARGE
+    private val clockHandler = Handler(Looper.getMainLooper())
+    private var clockX: Float = 0f
+    private var clockY: Float = 0f
+
+    /** 时钟显示样式 */
+    private enum class ClockStyle {
+        DIGITAL_LARGE,     // 大数字数字钟   23:07
+        CHINESE_TIME,      // 中文时间        二十三时零七分
+        MINIMAL_COLON,     // 极简细线        23·07
+        RETRO_LCD,         // 复古LED        [23:07]
+        DATE_TIME,         // 日期+时间双行   04-07\n23:07
+        AMPM_ENGLISH,      // AM/PM英文       11:07 PM
+        SECONDS_TICKER,    // 含秒            23:07:45
+        FUZZY_TIME         // 模糊时间        快到午夜了
+    }
 
     // ── 字体族列表（Android 系统内置字体）──────────────────────────────
     private val fontFamilies = listOf(
@@ -193,6 +213,9 @@ class FullscreenActivity : AppCompatActivity() {
         // 预生成同屏强对比色序列
         buildContrastColorSequence(words.size)
 
+        // 显示随机风格时钟
+        showClock()
+
         showWordsSequentially(words, 0)
 
         handler.postDelayed({
@@ -249,6 +272,218 @@ class FullscreenActivity : AppCompatActivity() {
             usedHues.add(newHue)
             currentScreenColors.add(Color.HSVToColor(floatArrayOf(newHue, s, v)))
         }
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  时钟显示
+    // ══════════════════════════════════════════════════════════════════
+
+    /** 随机选一种时钟样式，随机位置显示，每秒刷新 */
+    private fun showClock() {
+        removeClock()
+
+        // 随机选样式
+        clockStyle = ClockStyle.values().random()
+
+        // 时钟颜色：从当前屏颜色序列里随机取一个互补色，或直接随机亮色
+        val baseColor = if (currentScreenColors.isNotEmpty())
+            currentScreenColors.random()
+        else
+            generateVisibleColor()
+        val clockColor = complementColor(baseColor)
+
+        val tv = buildClockTextView(clockColor)
+        clockTextView = tv
+
+        // 先测量，再定随机位置（避开屏幕边缘）
+        val wSpec = View.MeasureSpec.makeMeasureSpec(screenWidth, View.MeasureSpec.AT_MOST)
+        val hSpec = View.MeasureSpec.makeMeasureSpec(screenHeight, View.MeasureSpec.AT_MOST)
+        tv.measure(wSpec, hSpec)
+        val tw = tv.measuredWidth.toFloat().coerceAtLeast(200f)
+        val th = tv.measuredHeight.toFloat().coerceAtLeast(80f)
+
+        val maxX = (screenWidth - tw - padding).coerceAtLeast(padding.toFloat())
+        val maxY = (screenHeight - th - padding).coerceAtLeast(padding.toFloat())
+        clockX = padding + Random.nextFloat() * maxX
+        clockY = padding + Random.nextFloat() * maxY
+
+        tv.x = clockX
+        tv.y = clockY
+        tv.alpha = 0f
+
+        container.addView(tv)
+
+        // 淡入
+        tv.animate().alpha(1f).setDuration(600)
+            .setInterpolator(DecelerateInterpolator()).start()
+
+        // 启动每秒刷新
+        scheduleClockTick()
+    }
+
+    /** 根据样式构建时钟 TextView（首次，不含位置） */
+    private fun buildClockTextView(color: Int): TextView {
+        val tv = TextView(this)
+        tv.setTextColor(color)
+        tv.gravity = Gravity.CENTER
+        tv.setShadowLayer(10f, 0f, 0f, complementColor(color))
+        tv.layoutParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT
+        )
+        applyClockStyle(tv, clockStyle)
+        return tv
+    }
+
+    /** 将样式（字体/字号/格式）应用到 tv，并更新时间文字 */
+    private fun applyClockStyle(tv: TextView, style: ClockStyle) {
+        val cal = Calendar.getInstance()
+        val h = cal.get(Calendar.HOUR_OF_DAY)
+        val m = cal.get(Calendar.MINUTE)
+        val s = cal.get(Calendar.SECOND)
+        val mon = cal.get(Calendar.MONTH) + 1
+        val day = cal.get(Calendar.DAY_OF_MONTH)
+
+        when (style) {
+            ClockStyle.DIGITAL_LARGE -> {
+                tv.text = "%02d:%02d".format(h, m)
+                tv.textSize = 72f
+                tv.typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
+                tv.letterSpacing = 0.15f
+            }
+            ClockStyle.CHINESE_TIME -> {
+                tv.text = toChineseTime(h, m)
+                tv.textSize = 36f
+                tv.typeface = Typeface.create("serif", Typeface.NORMAL)
+                tv.letterSpacing = 0.05f
+            }
+            ClockStyle.MINIMAL_COLON -> {
+                tv.text = "%02d·%02d".format(h, m)
+                tv.textSize = 56f
+                tv.typeface = Typeface.create("sans-serif-thin", Typeface.NORMAL)
+                tv.letterSpacing = 0.3f
+            }
+            ClockStyle.RETRO_LCD -> {
+                tv.text = "[%02d:%02d]".format(h, m)
+                tv.textSize = 48f
+                tv.typeface = Typeface.create("monospace", Typeface.BOLD)
+                tv.letterSpacing = 0.1f
+            }
+            ClockStyle.DATE_TIME -> {
+                tv.text = "%02d-%02d\n%02d:%02d".format(mon, day, h, m)
+                tv.textSize = 38f
+                tv.typeface = Typeface.create("sans-serif-condensed", Typeface.NORMAL)
+                tv.gravity = Gravity.CENTER
+                tv.letterSpacing = 0.08f
+            }
+            ClockStyle.AMPM_ENGLISH -> {
+                val h12 = if (h % 12 == 0) 12 else h % 12
+                val ampm = if (h < 12) "AM" else "PM"
+                tv.text = "%02d:%02d %s".format(h12, m, ampm)
+                tv.textSize = 52f
+                tv.typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                tv.letterSpacing = 0.12f
+            }
+            ClockStyle.SECONDS_TICKER -> {
+                tv.text = "%02d:%02d:%02d".format(h, m, s)
+                tv.textSize = 44f
+                tv.typeface = Typeface.create("monospace", Typeface.NORMAL)
+                tv.letterSpacing = 0.05f
+            }
+            ClockStyle.FUZZY_TIME -> {
+                tv.text = toFuzzyTime(h, m)
+                tv.textSize = 32f
+                tv.typeface = Typeface.create("serif", Typeface.ITALIC)
+                tv.letterSpacing = 0.02f
+            }
+        }
+    }
+
+    /** 每秒刷新时钟文字 */
+    private fun scheduleClockTick() {
+        clockHandler.postDelayed(object : Runnable {
+            override fun run() {
+                if (isExiting) return
+                val tv = clockTextView ?: return
+                applyClockStyle(tv, clockStyle)
+                // SECONDS_TICKER 每秒刷新，其余每分钟刷新也够，但统一1秒不影响性能
+                clockHandler.postDelayed(this, 1000L)
+            }
+        }, 1000L)
+    }
+
+    /** 移除时钟并停止刷新 */
+    private fun removeClock() {
+        clockHandler.removeCallbacksAndMessages(null)
+        clockTextView?.let {
+            it.animate().alpha(0f).setDuration(300).withEndAction {
+                container.removeView(it)
+            }.start()
+        }
+        clockTextView = null
+    }
+
+    // ── 时间文字转换工具 ──────────────────────────────────────────────────
+
+    private fun toChineseTime(h: Int, m: Int): String {
+        val digits = listOf("零","一","二","三","四","五","六","七","八","九",
+            "十","十一","十二","十三","十四","十五","十六","十七","十八","十九",
+            "二十","二十一","二十二","二十三")
+        val hStr = digits[h] + "时"
+        val mStr = when {
+            m == 0 -> "整"
+            m < 10 -> "零" + digits[m] + "分"
+            m < 20 -> digits[m] + "分"
+            else -> {
+                val tens = m / 10
+                val ones = m % 10
+                (if (tens == 2) "二十" else "三十") +
+                    (if (ones == 0) "" else digits[ones]) + "分"
+            }
+        }
+        return hStr + mStr
+    }
+
+    private fun toFuzzyTime(h: Int, m: Int): String {
+        return when {
+            m < 5  -> when (h) {
+                0, 24 -> "午夜刚过"
+                1     -> "凌晨一点"
+                2     -> "深夜两点"
+                3     -> "夜深三点"
+                4     -> "黎明前夕"
+                5     -> "天快亮了"
+                6     -> "清晨六点"
+                7     -> "早上七点"
+                8     -> "上午八点"
+                9     -> "上午九点"
+                10    -> "上午十点"
+                11    -> "快到中午了"
+                12    -> "正午时分"
+                13    -> "下午一点"
+                14    -> "下午两点"
+                15    -> "下午三点"
+                16    -> "下午四点"
+                17    -> "傍晚五点"
+                18    -> "傍晚六点"
+                19    -> "晚上七点"
+                20    -> "晚上八点"
+                21    -> "夜里九点"
+                22    -> "夜深十点"
+                23    -> "快到午夜了"
+                else  -> "此刻"
+            }
+            m < 15 -> "刚过${toHourChinese(h)}点"
+            m < 30 -> "${toHourChinese(h)}点一刻"
+            m < 45 -> "${toHourChinese(h)}点半"
+            else   -> "快到${toHourChinese((h + 1) % 24)}点了"
+        }
+    }
+
+    private fun toHourChinese(h: Int): String {
+        val names = listOf("零","一","二","三","四","五","六","七","八","九",
+            "十","十一","十二","一","二","三","四","五","六","七","八","九","十","十一")
+        return names.getOrElse(h) { h.toString() }
     }
 
     private fun splitTextIntoWords(text: String): List<String> {
@@ -741,6 +976,9 @@ class FullscreenActivity : AppCompatActivity() {
     private fun clearAllWordsAndContinue() {
         if (isExiting) return
 
+        // 移除时钟
+        removeClock()
+
         if (activeTextViews.isEmpty()) {
             waitAndShowNextMessage()
             return
@@ -856,6 +1094,7 @@ class FullscreenActivity : AppCompatActivity() {
     override fun onDestroy() {
         super.onDestroy()
         handler.removeCallbacksAndMessages(null)
+        clockHandler.removeCallbacksAndMessages(null)
     }
 
     // 双击退出屏保
