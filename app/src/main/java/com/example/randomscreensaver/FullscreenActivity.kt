@@ -318,6 +318,14 @@ class FullscreenActivity : AppCompatActivity() {
         cv.y = yPos
         container.addView(cv)
 
+        // ── 把时钟区域加入 usedRects，避免文字与时钟重叠 ──
+        usedRects.add(Rect(
+            xPos - padding,
+            yPos - padding,
+            xPos + cw + padding,
+            yPos + ch + padding
+        ))
+
         // 淡入
         cv.animate().alpha(1f).setDuration(600)
             .setInterpolator(DecelerateInterpolator()).start()
@@ -340,7 +348,8 @@ class FullscreenActivity : AppCompatActivity() {
         clockHandler.removeCallbacksAndMessages(null)
         clockView?.let { cv ->
             cv.animate().alpha(0f).setDuration(300).withEndAction {
-                container.removeView(cv)
+                // 双击退出时 container 已被 removeAllViews，这里安全地尝试移除即可
+                try { container.removeView(cv) } catch (_: Exception) {}
             }.start()
         }
         clockView = null
@@ -860,6 +869,7 @@ class FullscreenActivity : AppCompatActivity() {
                     if (isExiting) return@playExitAnimation
                     completedCount++
                     if (completedCount >= totalCount) {
+                        if (isExiting) return@playExitAnimation
                         container.removeAllViews()
                         activeTextViews.clear()
                         usedRects.clear()
@@ -874,15 +884,15 @@ class FullscreenActivity : AppCompatActivity() {
         when (type) {
             0 -> { // 淡出缩小
                 textView.animate().alpha(0f).scaleX(0f).scaleY(0f)
-                    .setDuration(350).withEndAction { onComplete() }.start()
+                    .setDuration(350).withEndAction { if (!isExiting) onComplete() }.start()
             }
             1 -> { // 向上飞出
                 textView.animate().y(-300f).alpha(0f)
-                    .setDuration(350).withEndAction { onComplete() }.start()
+                    .setDuration(350).withEndAction { if (!isExiting) onComplete() }.start()
             }
             2 -> { // 向右飞出
                 textView.animate().x(screenWidth + 300f).alpha(0f)
-                    .setDuration(350).withEndAction { onComplete() }.start()
+                    .setDuration(350).withEndAction { if (!isExiting) onComplete() }.start()
             }
             3 -> { // 旋转消失
                 ObjectAnimator.ofPropertyValuesHolder(
@@ -894,23 +904,25 @@ class FullscreenActivity : AppCompatActivity() {
                 ).apply {
                     duration = 350
                     addListener(object : AnimatorListenerAdapter() {
-                        override fun onAnimationEnd(animation: Animator) { onComplete() }
+                        override fun onAnimationEnd(animation: Animator) {
+                            if (!isExiting) onComplete()
+                        }
                     })
                     start()
                 }
             }
             4 -> { // 向左飞出
                 textView.animate().x(-300f).alpha(0f)
-                    .setDuration(350).withEndAction { onComplete() }.start()
+                    .setDuration(350).withEndAction { if (!isExiting) onComplete() }.start()
             }
             5 -> { // 向下掉落
                 textView.animate().y(screenHeight + 200f).alpha(0f)
                     .setInterpolator(AccelerateInterpolator(2f))
-                    .setDuration(400).withEndAction { onComplete() }.start()
+                    .setDuration(400).withEndAction { if (!isExiting) onComplete() }.start()
             }
             6 -> { // 爆炸放大消失
                 textView.animate().scaleX(3f).scaleY(3f).alpha(0f)
-                    .setDuration(350).withEndAction { onComplete() }.start()
+                    .setDuration(350).withEndAction { if (!isExiting) onComplete() }.start()
             }
             7 -> { // 翻转消失
                 ObjectAnimator.ofFloat(textView, "rotationY", 0f, 90f).apply {
@@ -918,7 +930,7 @@ class FullscreenActivity : AppCompatActivity() {
                     addListener(object : AnimatorListenerAdapter() {
                         override fun onAnimationEnd(animation: Animator) {
                             textView.alpha = 0f
-                            onComplete()
+                            if (!isExiting) onComplete()
                         }
                     })
                     start()
@@ -965,8 +977,13 @@ class FullscreenActivity : AppCompatActivity() {
             val currentTime = System.currentTimeMillis()
             if (currentTime - lastClickTime < doubleClickInterval) {
                 Log.d("FullscreenActivity", "双击退出屏保")
+                // ① 先置标志，所有 isExiting 检查点都会跳过
                 isExiting = true
+                // ② 清两个 handler 的所有挂起任务
                 handler.removeCallbacksAndMessages(null)
+                clockHandler.removeCallbacksAndMessages(null)
+                // ③ 立即取消所有正在运行的 View 动画，防止 withEndAction 回调继续触发
+                container.removeAllViews()
                 finish()
                 return true
             } else {
