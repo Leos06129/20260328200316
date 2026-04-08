@@ -147,7 +147,23 @@ class FullscreenActivity : AppCompatActivity() {
         screenWidth = displayMetrics.widthPixels
         screenHeight = displayMetrics.heightPixels
 
-        container.setOnTouchListener { _, _ -> false }
+        // 双击退出检测放在 container 上，确保任何时候都能响应
+        container.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_UP -> {
+                    val currentTime = System.currentTimeMillis()
+                    if (currentTime - lastClickTime < doubleClickInterval) {
+                        Log.d("FullscreenActivity", "双击退出屏保")
+                        exitScreensaver()
+                        true
+                    } else {
+                        lastClickTime = currentTime
+                        false
+                    }
+                }
+                else -> false
+            }
+        }
 
         currentMessage = intent.getStringExtra(EXTRA_MESSAGE) ?: getString(R.string.default_message)
         currentMessage2 = intent.getStringExtra(EXTRA_MESSAGE2)
@@ -971,20 +987,22 @@ class FullscreenActivity : AppCompatActivity() {
         clockHandler.removeCallbacksAndMessages(null)
     }
 
-    // 双击退出屏保
+    // 统一退出方法：任何时刻调用都立即结束屏保
+    private fun exitScreensaver() {
+        isExiting = true
+        handler.removeCallbacksAndMessages(null)
+        clockHandler.removeCallbacksAndMessages(null)
+        container.removeAllViews()
+        finish()
+    }
+
+    // 双击退出屏保（备用，container 的 OnTouchListener 优先处理）
     override fun onTouchEvent(event: MotionEvent): Boolean {
         if (event.action == MotionEvent.ACTION_UP) {
             val currentTime = System.currentTimeMillis()
             if (currentTime - lastClickTime < doubleClickInterval) {
-                Log.d("FullscreenActivity", "双击退出屏保")
-                // ① 先置标志，所有 isExiting 检查点都会跳过
-                isExiting = true
-                // ② 清两个 handler 的所有挂起任务
-                handler.removeCallbacksAndMessages(null)
-                clockHandler.removeCallbacksAndMessages(null)
-                // ③ 立即取消所有正在运行的 View 动画，防止 withEndAction 回调继续触发
-                container.removeAllViews()
-                finish()
+                Log.d("FullscreenActivity", "双击退出屏保 (onTouchEvent)")
+                exitScreensaver()
                 return true
             } else {
                 lastClickTime = currentTime
